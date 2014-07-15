@@ -1,0 +1,1 @@
+Downloaded from ftp://ftp.ac-grenoble.fr/ge/geosciences/xrmap/data/
