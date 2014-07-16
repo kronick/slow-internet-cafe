@@ -80,6 +80,10 @@ class SurfMaster(controller.Master):
 
 					msg.content = output
 					msg.encode(msg.headers["content-encoding"][0])
+					
+					# Don't cache
+					msg.headers["Pragma"] = ["no-cache"]
+					msg.headers["Cache-Control"] = ["no-cache, no-store"]
 
 					# Update the list
 					waveQueue.clear()

@@ -3,14 +3,10 @@
 from libmproxy import controller, proxy
 import os
 import requests
-import json
 import threading
 import socket
 
-local_country_codes = ["es"]
-local_region_codes = ["*"]
-
-class LocalMaster(controller.Master):
+class BlackoutMaster(controller.Master):
 	def __init__(self, server):
 		controller.Master.__init__(self, server)
 
@@ -49,11 +45,12 @@ class LocalMaster(controller.Master):
 				if msg.get_content_type() is not None and "text/html" in msg.get_content_type() and msg.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
 					# Try to do a local DNS lookup and search by IP for more accurate results
 					try:
-						query = socket.gethostbyaddr(msg.request.host)[2][0]
+						#query = socket.gethostbyaddr(msg.request.host)[2][0]
+						query = socket.getaddrinfo(msg.request.host, 80)[0][4][0]	# I think this is more reliable
 					except:
 						query = msg.request.host
 
-					print msg.request.host
+					print query
 					r = requests.get("http://freegeoip.net/json/" + query)
 					print r.content
 					try:
@@ -111,6 +108,6 @@ config = proxy.ProxyConfig(
 	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
 )
 server = proxy.ProxyServer(config, 8080)
-m = LocalMaster(server)
+m = BlackoutMaster(server)
 m.run()
 

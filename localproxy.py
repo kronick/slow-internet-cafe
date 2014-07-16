@@ -45,11 +45,12 @@ class LocalMaster(controller.Master):
 
 			def run():
 				
-				# Only worry about HTML for now
-				if msg.get_content_type() is not None and "text/html" in msg.get_content_type() and msg.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
+				# Only worry about HTML for now (and ignore 301/302 redirects)
+				if msg.code != 301 and msg.code != 302 and msg.get_content_type() is not None and "text/html" in msg.get_content_type() and msg.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
 					# Try to do a local DNS lookup and search by IP for more accurate results
 					try:
-						query = socket.gethostbyaddr(msg.request.host)[2][0]
+						#query = socket.gethostbyaddr(msg.request.host)[2][0]
+						query = socket.getaddrinfo(msg.request.host, 80)[0][4][0]	# I think this is more reliable
 					except:
 						query = msg.request.host
 
@@ -90,9 +91,17 @@ class LocalMaster(controller.Master):
 							#	msg.encode(msg.headers["content-encoding"][0])
 							# Force uncompressed response
 							msg.headers["content-encoding"] = [""]
+							
+							# Don't cache
+							msg.headers["Pragma"] = ["no-cache"]
+							msg.headers["Cache-Control"] = ["no-cache, no-store"]
 					except ValueError as e:
 						msg.content = "<html><body style='background: url(http://127.0.0.1:8000/flags/missing.png); background-size: 100%;'><div style='width: 900px; height: 200px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto;'>I DON'T KNOW WHERE I AM<br><span style='font-size: 50%; line-height: 1.75em;'>Check back later to find out if<br>{}<br>is local.</span></div></div></body></html>".format(msg.request.host.upper())
 						msg.headers["content-encoding"] = [""]
+						# Don't cache
+						msg.headers["Pragma"] = ["no-cache"]
+						msg.headers["Cache-Control"] = ["no-cache, no-store"]
+						
 						print "Could not decode JSON: " + str(e)
 					
 					reply()

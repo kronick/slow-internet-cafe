@@ -86,6 +86,10 @@ class FacesMaster(controller.Master):
 
 				msg.content = processedFace("tmp_o.jpg") or msg.content
 				
+				# Don't cache
+				msg.headers["Pragma"] = ["no-cache"]
+				msg.headers["Cache-Control"] = ["no-cache, no-store"]
+
 				#img = cv2.imread("tmp_o.jpg")
 				#gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 

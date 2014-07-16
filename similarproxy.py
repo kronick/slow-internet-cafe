@@ -94,6 +94,9 @@ class SimilarMaster(controller.Master):
 					
 							# Force uncompressed response
 							msg.headers["content-encoding"] = [""]
+							# And don't cache
+							msg.headers["Pragma"] = ["no-cache"]
+							msg.headers["Cache-Control"] = ["no-cache, no-store"]
 						else:
 							print "Could not find any similar images."
 
