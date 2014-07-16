@@ -1,9 +1,14 @@
+# TODO:
+# [ ] Limit number of requests/threads per user
+# [ ] Better error handling/investigate crashes
+
 from libmproxy import controller, proxy
 import os
 import threading
 import requests
 import base64
 import httplib
+import json
 
 
 from bs4 import BeautifulSoup
@@ -23,8 +28,8 @@ class SimilarMaster(controller.Master):
 	def handle_request(self, msg):
 		# Process requests from users to Internet servers
 
-		# Don't allow cached HTML requests, but go ahead and cache CSS, JS, images, etc
-		if "image/jpeg" in "".join(msg.headers["accept"]) or "image/webp" in "".join(msg.headers["accept"]):
+		# Don't allow cached images requests, but go ahead and cache CSS, JS, HTML, etc
+		if "image/jpeg" in "".join(msg.headers["accept"]) or "image/webp" in "".join(msg.headers["accept"]) or "image/png" in "".join(msg.headers["accept"]) or "image/gif" in "".join(msg.headers["accept"]):
 			del(msg.headers["if-modified-since"])
 			del(msg.headers["if-none-match"])
 
@@ -32,7 +37,11 @@ class SimilarMaster(controller.Master):
 
 	def handle_response(self, msg):
 		# Process replies from Internet servers to users
-		if msg.headers["content-type"] == ["image/jpeg"] and msg.code == 200:
+		#print msg.request.headers
+		#if msg.request.headers["X-Do-Not-Replace"]:
+		#	print "Ignoring this image to avoid infinite loop..."
+
+		if (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.request.headers["X-Do-Not-Replace"]:
 			try:
 				# Make this threaded:
 				reply = msg.reply
@@ -42,13 +51,7 @@ class SimilarMaster(controller.Master):
 					msg.reply.q = reply.q
 
 				def run():
-
-					#f = open("tmp_o.jpg", "w+")
-					#f.write(msg.content)
-					#f.close()
-
-
-
+					# [ ] Better error handling/investigate crashes
 					# Make a POST request with multipart/form and following fields:
 					# filename: whatever.jpg
 					# image_content: base_64 encoded data with "-_" instead of "+/"
@@ -56,61 +59,52 @@ class SimilarMaster(controller.Master):
 					# image_url: None
 					# And original headers
 
+					search_url = "http://images.google.com/searchbyimage/upload"
 					filename = "similar.jpg"
 					image_content = base64.b64encode(msg.content, "-_")
+					
+					request_headers = {
+						 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+						 "Proxy-Connection": "keep-alive",
+						 "Cache-Control": "max-age=0",
+						 "Origin": "http://images.google.com",
+						 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
+						 "X-Client-Data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
+						 "Referer": "http://images.google.com/",
+						 "Accept-Encoding": "gzip,deflate,sdch",
+						 "Accept-Language": "en-US,en;q=0.8"
+					}
 
-					t = upload_to_google(image_content)
+					r = requests.post(search_url,
+						files={"image_url": "", "encoded_image": "", "image_content": image_content, "filename": filename},
+						headers = request_headers)
 
-					url = "http://httpbin.org/post"
-					#url = "http://images.google.com/searchbyimage/upload"
-					# r = requests.post(url,
-					# 				  #files={"filename": filename, "image_content": image_content, "image_url": "", "encoded_image": ""},
+					try:
+						soup = BeautifulSoup(r.text)
+						
+						similar_section = soup.find(id="iur")
+						if(similar_section is not None):
+							similar_elements = similar_section.find_all("li")
 
-					# 				  files = "123",
+							similar_url = json.loads(similar_elements[0].find(class_="rg_meta").text)["ou"]
 
-					# 				  # headers = {"host": "images.google.com",
-					# 				  # 			 "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-					# 				  # 			 "proxy-connect": "keep-alive",
-					# 				  # 			 "cache-control": "max-age=0",
-					# 				  # 			 "origin": "http://images.google.com",
-					# 				  # 			 #"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
-					# 				  # 			 #"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
-					# 				  # 			 "x-client-data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
-					# 				  # 			 #"content-type": "multipart/form-data; boundary=----WebKitFormBoundaryE4lHG8YtkYgZeGXW",
-					# 				  # 			 "referer": "http://images.google.com/",
-					# 				  # 			 "accept-encoding": "gzip,deflate,sdch",
-					# 				  # 			 "accept-language": "en-US,en;q=0.8",
-					# 				  # 			 #"cookie": "PREF=ID=4a50a001b91fd6c2:FF=0:TM=1405427880:LM=1405427880:S=hgq1NqlFuP8OAY5h; NID=67=Bk33psfCcyeOkaBVQMSDK5KcprebrMv7ycHiMMKH7WQctb4QMEaggbPjwEsAb5c_bSFikbOsPe2PzBT0G8MJZZTVTAMop93ATqp0Tbul_IU55mEp2pxijVUTnnGdym1H"
-					# 				  # 			 "cookie": "OGPC=4061135-1:4061130-22:; OGP=-4061130:; PREF=ID=7f5416533b04f0e7:U=0b7757f53644dbcf:FF=0:LD=en:CR=2:TM=1395716670:LM=1405374050:DV=kmdYOgebfREditOmwYZI6u3jk1bgigI:GM=1:S=8m2OYPAR8yWMobGc; NID=67=WLxGTLzthckcySqP4YJ6b1rh5WrV4Na1eZev3N2BpXxCLpZi0kQPHJzaQF6ozGJQj9Ws1DKaRDbQ5r7-F_PLi3sThrfSDLGBmQf2DzsC36WS9tcSUOGXCE_116R3U_-Z9VjERff-3V07DM9DWY0qCSZG9Yo4lxHjMMhSWAh1y9kGUOLfThM"
-					# 				  # 			 }
+							print "Replacing with <{}>".format(similar_url)
+							img = requests.get(similar_url, headers={"X-Do-Not-Replace": "True"})
+							msg.content = img.content
+					
+							# Force uncompressed response
+							msg.headers["content-encoding"] = [""]
+						else:
+							print "Could not find any similar images."
 
-					# 				  headers = {"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-					# 				  			 "proxy-connect": "keep-alive",
-					# 				  			 "cache-control": "max-age=0",
-					# 				  			 #"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
-					# 				  			 #"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
-					# 				  			 "x-client-data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
-					# 				  			 #"content-type": "multipart/form-data; boundary=----WebKitFormBoundaryE4lHG8YtkYgZeGXW",
-					# 				  			 "accept-encoding": "gzip,deflate,sdch",
-					# 				  			 "accept-language": "en-US,en;q=0.8",
-					# 				  			 #"cookie": "PREF=ID=4a50a001b91fd6c2:FF=0:TM=1405427880:LM=1405427880:S=hgq1NqlFuP8OAY5h; NID=67=Bk33psfCcyeOkaBVQMSDK5KcprebrMv7ycHiMMKH7WQctb4QMEaggbPjwEsAb5c_bSFikbOsPe2PzBT0G8MJZZTVTAMop93ATqp0Tbul_IU55mEp2pxijVUTnnGdym1H"
-					# 				  			 "cookie": "OGPC=4061135-1:4061130-22:; OGP=-4061130:; PREF=ID=7f5416533b04f0e7:U=0b7757f53644dbcf:FF=0:LD=en:CR=2:TM=1395716670:LM=1405374050:DV=kmdYOgebfREditOmwYZI6u3jk1bgigI:GM=1:S=8m2OYPAR8yWMobGc; NID=67=WLxGTLzthckcySqP4YJ6b1rh5WrV4Na1eZev3N2BpXxCLpZi0kQPHJzaQF6ozGJQj9Ws1DKaRDbQ5r7-F_PLi3sThrfSDLGBmQf2DzsC36WS9tcSUOGXCE_116R3U_-Z9VjERff-3V07DM9DWY0qCSZG9Yo4lxHjMMhSWAh1y9kGUOLfThM"
-					# 				  			 }
-					# 				 )
+					except Exception as e:
+						print e
 
-					# #print r.request.headers
-
-					# print r.text
-
-					#print msg.request.headers
-					#print "{}: {}".format(r.status_code, r.text.encode("utf-8"))
-					soup = BeautifulSoup(t)
-					print soup.prettify()
-					#print soup.title
-					#print soup.find_all(id="resultStats")
-					#for link in soup.find_all("a"):
-					#	print link.get("href")
+					#print similar_url
+					
 					#print soup.text
+
+					reply()
 
 
 				threading.Thread(target=run).start()
@@ -119,76 +113,8 @@ class SimilarMaster(controller.Master):
 			except Exception as e:
 				print "Error processing image: {}".format(e)
 
-		msg.reply()
-
-def upload_to_google(image_content):
-	host = "images.google.com"
-	selector = "/searchbyimage/upload"
-
-	heads = {"host": "images.google.com",
-		 "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-		 "proxy-connect": "keep-alive",
-		 "cache-control": "max-age=0",
-		 "origin": "http://images.google.com",
-		 #"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
-		 "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2)",
-		 "x-client-data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
-		 #"content-type": "multipart/form-data; boundary=----WebKitFormBoundaryE4lHG8YtkYgZeGXW",
-		 "referer": "http://images.google.com/",
-		 "accept-encoding": "gzip,deflate,sdch",
-		 "accept-language": "en-US,en;q=0.8",
-		 
-		 #"cookie": "OGPC=4061135-1:4061130-22:; OGP=-4061130:; PREF=ID=7f5416533b04f0e7:U=0b7757f53644dbcf:FF=0:LD=en:CR=2:TM=1395716670:LM=1405374050:DV=kmdYOgebfREditOmwYZI6u3jk1bgigI:GM=1:S=8m2OYPAR8yWMobGc; NID=67=WLxGTLzthckcySqP4YJ6b1rh5WrV4Na1eZev3N2BpXxCLpZi0kQPHJzaQF6ozGJQj9Ws1DKaRDbQ5r7-F_PLi3sThrfSDLGBmQf2DzsC36WS9tcSUOGXCE_116R3U_-Z9VjERff-3V07DM9DWY0qCSZG9Yo4lxHjMMhSWAh1y9kGUOLfThM"
-		 "cookie": "PREF=ID=d15bb57ccd5b6658:FF=0:TM=1405432071:LM=1405432071:S=EU8w9yOCNeiEdy5P; NID=67=aZIWgJZU6Qsy9NPyrJm9J9O605s3xkqRE_Ncz_Z3C9TszihJmjBr_atcTrJyi67U8D5YeOuCisDeJ4O3_nhOw7SzpMpPcUWqdM-GTkAVYLPxXN8EXX4mhjtZIQxUfXmh"
-		 }
-
-	BOUNDARY = "----WebKitFormBoundaryE4lHG8YtkYgZeGXW"
-	CRLF = "\r\n"
-	L = []
-	L.append(BOUNDARY)
-	L.append('Content-Disposition: form-data; name="image_url"')
-	L.append('')
-	L.append('')
-	L.append(BOUNDARY)
-	L.append('Content-Disposition: form-data; name="encoded_image"; filename=""')
-	L.append('Content-Type: application/octet-stream')
-	L.append('')
-	L.append('')
-	L.append(BOUNDARY)
-	L.append('Content-Disposition: form-data; name="image_content"')
-	L.append('')
-	L.append(image_content)
-	L.append(BOUNDARY)
-	L.append('Content-Disposition: form-data; name="filename"')
-	L.append('')
-	L.append("file.jpg")
-	L.append(BOUNDARY)
-
-	body = CRLF.join(L)
-
-	content_type = 'multipart/form-data; boundary={}'.format(BOUNDARY)
-	
-	h = httplib.HTTP(host)
-	h.putrequest('POST', selector)
-	h.putheader('content-type', content_type)
-	h.putheader('content-length', str(len(body)))
-	for k in heads:
-		h.putheader(k, heads[k])
-
-	h.endheaders()
-	h.send(body)
-
-	#print h.getreply()
-	errcode, errmsg, headers = h.getreply()
-
-	if(errcode == 302):
-		print  h.file.read()
-		r = requests.get(headers["location"], headers=heads)
-		return r.text
-
-	#print headers["location"]
-	else:
-		return h.file.read()
+		else:
+			msg.reply()
 
 config = proxy.ProxyConfig(
 	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
