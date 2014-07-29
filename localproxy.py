@@ -1,6 +1,9 @@
 # coding=utf-8
 
 from libmproxy import controller, proxy
+from libmproxy.proxy.config import ProxyConfig
+from libmproxy.proxy.server import ProxyServer
+
 import os
 import requests
 import json
@@ -9,6 +12,7 @@ import socket
 
 local_country_codes = ["es"]
 local_region_codes = ["*"]
+
 
 class LocalMaster(controller.Master):
 	def __init__(self, server):
@@ -44,17 +48,19 @@ class LocalMaster(controller.Master):
 				msg.reply.q = reply.q
 
 			def run():
-				
+				print dir(msg)
+				print msg.headers
 				# Only worry about HTML for now (and ignore 301/302 redirects)
-				if msg.code != 301 and msg.code != 302 and msg.get_content_type() is not None and "text/html" in msg.get_content_type() and msg.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
+				content_type = " ".join(msg.headers["content-type"])
+				if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type and msg.flow.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
 					# Try to do a local DNS lookup and search by IP for more accurate results
 					try:
 						#query = socket.gethostbyaddr(msg.request.host)[2][0]
-						query = socket.getaddrinfo(msg.request.host, 80)[0][4][0]	# I think this is more reliable
+						query = socket.getaddrinfo(msg.flow.request.host, 80)[0][4][0]	# I think this is more reliable
 					except:
-						query = msg.request.host
+						query = msg.flow.request.host
 
-					print msg.request.host
+					print msg.flow.request.host
 					r = requests.get("http://freegeoip.net/json/" + query)
 					print r.content
 					try:
@@ -81,7 +87,7 @@ class LocalMaster(controller.Master):
 
 							#msg.content = u"<html><body style='background: #b9b9a9 '><div style='margin-top: 1em; margin-bottom: 1em; text-align: center; font-size: 24pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em;'>{}<br><img src='http://localhost:8000/flags/{}.png' style='height: 400px'><br>IS NOT LOCAL<br>{}</div></body></html>".format(msg.request.host.upper(), flag, extras)
 							#msg.content = "<html><body style='background: #ff8989; background: -moz-linear-gradient(-45deg, #ff8989 0%, #53cbf1 97%); background: -webkit-gradient(linear, left top, right bottom, color-stop(0%,#ff8989), color-stop(97%,#53cbf1)); background: -webkit-linear-gradient(-45deg, #ff8989 0%,#53cbf1 97%); background: -o-linear-gradient(-45deg, #ff8989 0%,#53cbf1 97%); background: -ms-linear-gradient(-45deg, #ff8989 0%,#53cbf1 97%); background: linear-gradient(135deg, #ff8989 0%,#53cbf1 97%); filter: progid:DXImageTransform.Microsoft.gradient( startColorstr=\'#ff8989\', endColorstr=\'#53cbf1\',GradientType=1 ); '><div style='margin-top: 1em; margin-bottom: 1em; text-align: center; font-size: 24pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em;'>{}<br><img src='http://localhost:8000/flags/{}.png' style='height: 400px'><br>IS NOT LOCAL<br>{}</div></body></html>".format(msg.request.host.upper(), country_code, extras)
-							msg.content = u"<html><body style='background: url(http://127.0.0.1:8000/flags/{}.png); background-size: 100%;'><div style='width: 900px; height: 200px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto;'>{}<br>IS NOT LOCAL<br>{}</div></div></body></html>".format(flag, msg.request.host.upper(), extras)
+							msg.content = u"<html><body style='background: url(http://127.0.0.1:8000/flags/{}.png); background-size: 100%;'><div style='width: 900px; height: 200px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto;'>{}<br>IS NOT LOCAL<br>{}</div></div></body></html>".format(flag, msg.flow.request.host.upper(), extras)
 						
 							# Force unicode
 							msg.content = msg.content.encode("utf-8")
@@ -116,10 +122,12 @@ class LocalMaster(controller.Master):
 
 		#msg.reply()
 
-config = proxy.ProxyConfig(
-	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+config = ProxyConfig(
+	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
+	confdir = "~/.mitmproxy"
 )
-server = proxy.ProxyServer(config, 8080)
+#config = None
+server = ProxyServer(config, 8080)
 m = LocalMaster(server)
 m.run()
 
