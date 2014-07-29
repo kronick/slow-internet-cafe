@@ -24,6 +24,7 @@ options = {
 }
 
 images_processed = 0
+images_pending = 0;
 
 class SimilarMaster(controller.Master):
 
@@ -54,11 +55,14 @@ class SimilarMaster(controller.Master):
 		is_image = (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"] and len(msg.content) > options["smallest_image"]
 
 		global images_processed
+		global images_pending
 		if is_image: images_processed += 1
 		should_process = images_processed % options["frequency"] == 0
 		
 		if is_image and should_process:
+			images_pending += 1
 			print "Processing " + msg.flow.request.get_url()
+			print "({} images in the queue...)".format(images_pending)
 			try:
 				# Make this threaded:
 				reply = msg.reply
@@ -68,6 +72,7 @@ class SimilarMaster(controller.Master):
 					msg.reply.q = reply.q
 
 				def run():
+					global images_pending
 					# [ ] Better error handling/investigate crashes
 					# Make a POST request with multipart/form and following fields:
 					# filename: whatever.jpg
@@ -125,6 +130,7 @@ class SimilarMaster(controller.Master):
 					#print soup.text
 
 					reply()
+					images_pending -= 1
 
 
 				threading.Thread(target=run).start()
