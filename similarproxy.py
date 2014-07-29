@@ -20,10 +20,13 @@ from PIL import Image
 
 options = {
 	"frequency": 3,	# Only replace every nth image
+	"smallest_image": 5000, # Only consider images larger than this many bytes
 }
+
 images_processed = 0
 
 class SimilarMaster(controller.Master):
+
 	def __init__(self, server):
 		controller.Master.__init__(self, server)
 
@@ -48,10 +51,14 @@ class SimilarMaster(controller.Master):
 		#print msg.flow.request.headers
 		#if msg.flow.request.headers["X-Do-Not-Replace"]:
 		#	print "Ignoring this image to avoid infinite loop..."
-		is_image = (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"]
+		is_image = (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"] and len(msg.content) > options["smallest_image"]
+
+		global images_processed
 		if is_image: images_processed += 1
-		should_process = (images_processd % options["frequency"] == 0)
+		should_process = images_processed % options["frequency"] == 0
+		
 		if is_image and should_process:
+			print "Processing " + msg.flow.request.get_url()
 			try:
 				# Make this threaded:
 				reply = msg.reply
