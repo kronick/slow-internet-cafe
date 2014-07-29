@@ -18,6 +18,11 @@ from bs4 import BeautifulSoup
 
 from PIL import Image
 
+options = {
+	"frequency": 3,	# Only replace every nth image
+}
+images_processed = 0
+
 class SimilarMaster(controller.Master):
 	def __init__(self, server):
 		controller.Master.__init__(self, server)
@@ -44,7 +49,7 @@ class SimilarMaster(controller.Master):
 		#if msg.flow.request.headers["X-Do-Not-Replace"]:
 		#	print "Ignoring this image to avoid infinite loop..."
 
-		if (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"]:
+		if (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"] and images_processed++ % options["frequency"] == 0:
 			try:
 				# Make this threaded:
 				reply = msg.reply
