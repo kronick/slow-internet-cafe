@@ -115,5 +115,6 @@ config = ProxyConfig(
 )
 server = ProxyServer(config, 8080)
 m = SurfMaster(server)
+print "Proxy server loaded."
 m.run()
 

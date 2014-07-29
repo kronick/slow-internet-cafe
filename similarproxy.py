@@ -127,5 +127,6 @@ config = ProxyConfig(
 )
 server = ProxyServer(config, 8080)
 m = SimilarMaster(server)
+print "Proxy server loaded."
 m.run()
 

@@ -111,5 +111,6 @@ config = ProxyConfig(
 )
 server = ProxyServer(config, 8080)
 m = FacesMaster(server)
+print "Proxy server loaded."
 m.run()
 

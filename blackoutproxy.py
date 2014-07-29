@@ -147,5 +147,6 @@ config = ProxyConfig(
 )
 server = ProxyServer(config, 8080)
 m = BlackoutMaster(server)
+print "Proxy server loaded."
 m.run()
 
