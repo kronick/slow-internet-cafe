@@ -1,6 +1,9 @@
 # coding=utf-8
 
 from libmproxy import controller, proxy
+from libmproxy.proxy.config import ProxyConfig
+from libmproxy.proxy.server import ProxyServer
+
 import os
 import requests
 import threading
@@ -46,7 +49,7 @@ class BlackoutMaster(controller.Master):
 			def run():
 
 				# Check if the requested URL is already in the database
-				url = msg.request.get_url().lower()
+				url = msg.flow.request.get_url().lower()
 				
 				db = sqlite3.connect("db/blackout.db")
 				cursor = db.cursor()
@@ -128,7 +131,8 @@ class BlackoutMaster(controller.Master):
 				reply()
 
 			# Only worry about HTML for now and automatically follow redirects
-			if msg.code != 301 and msg.code != 302 and msg.get_content_type() is not None and "text/html" in msg.get_content_type() and msg.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
+			content_type = " ".join(msg.headers["content-type"])
+			if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type and msg.flow.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
 				threading.Thread(target=run).start()
 			else:
 				reply()
@@ -138,10 +142,10 @@ class BlackoutMaster(controller.Master):
 
 		#msg.reply()
 
-config = proxy.ProxyConfig(
-	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+config = ProxyConfig(
+	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
 )
-server = proxy.ProxyServer(config, 8080)
+server = ProxyServer(config, 8080)
 m = BlackoutMaster(server)
 m.run()
 

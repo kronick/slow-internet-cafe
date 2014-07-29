@@ -1,4 +1,7 @@
 from libmproxy import controller, proxy
+from libmproxy.proxy.config import ProxyConfig
+from libmproxy.proxy.server import ProxyServer
+
 from random import random, randrange, randint, shuffle
 import os
 
@@ -40,13 +43,14 @@ class SurfMaster(controller.Master):
 		# ------------------------------------------------
 		try:
 			# Only worry about HTML for now
-			if msg.get_content_type() is not None and "text/html" in msg.get_content_type():
+			content_type = " ".join(msg.headers["content-type"])
+			if content_type is not None and "text/html" in content_type:
 				#print msg.headers["content-encoding"]
 				#print dir(msg)
 				#print msg.get_decoded_content()
 
-				new = not waveQueue.has_key(msg.request.get_url())
-				waveQueue[msg.request.get_url()] = msg.get_decoded_content()
+				new = not waveQueue.has_key(msg.flow.request.get_url())
+				waveQueue[msg.flow.request.get_url()] = msg.get_decoded_content()
 
 				if new or random() < weather_params["WAIT"]:
 					# Tranquilo...
@@ -58,13 +62,13 @@ class SurfMaster(controller.Master):
 					survivors = {}
 					for url in waveQueue:
 						# Always output the current page, maybe some extra junk
-						if msg.request.get_url() == url or random() < weather_params["SLOP"]:
+						if msg.flow.request.get_url() == url or random() < weather_params["SLOP"]:
 							thispage = waveQueue[url]
 							insertion_point = randint(0, len(output))
 
 							cut_start = randint(0, len(thispage))
 							cut_stop  = randint(cut_start, len(thispage))
-							if msg.request.get_url() == url:
+							if msg.flow.request.get_url() == url:
 								cut_start = 0
 								cut_stop = len(thispage)
 							
@@ -106,10 +110,10 @@ class SurfMaster(controller.Master):
 
 		msg.reply()
 
-config = proxy.ProxyConfig(
-	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+config = ProxyConfig(
+	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
 )
-server = proxy.ProxyServer(config, 8080)
+server = ProxyServer(config, 8080)
 m = SurfMaster(server)
 m.run()
 

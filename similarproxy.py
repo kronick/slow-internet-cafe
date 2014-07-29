@@ -3,6 +3,9 @@
 # [ ] Better error handling/investigate crashes
 
 from libmproxy import controller, proxy
+from libmproxy.proxy.config import ProxyConfig
+from libmproxy.proxy.server import ProxyServer
+
 import os
 import threading
 import requests
@@ -37,11 +40,11 @@ class SimilarMaster(controller.Master):
 
 	def handle_response(self, msg):
 		# Process replies from Internet servers to users
-		#print msg.request.headers
-		#if msg.request.headers["X-Do-Not-Replace"]:
+		#print msg.flow.request.headers
+		#if msg.flow.request.headers["X-Do-Not-Replace"]:
 		#	print "Ignoring this image to avoid infinite loop..."
 
-		if (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.request.headers["X-Do-Not-Replace"]:
+		if (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"]:
 			try:
 				# Make this threaded:
 				reply = msg.reply
@@ -119,10 +122,10 @@ class SimilarMaster(controller.Master):
 		else:
 			msg.reply()
 
-config = proxy.ProxyConfig(
-	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+config = ProxyConfig(
+	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
 )
-server = proxy.ProxyServer(config, 8080)
+server = ProxyServer(config, 8080)
 m = SimilarMaster(server)
 m.run()
 

@@ -1,4 +1,7 @@
 from libmproxy import controller, proxy
+from libmproxy.proxy.config import ProxyConfig
+from libmproxy.proxy.server import ProxyServer
+
 import os
 import cStringIO
 import cv2
@@ -76,7 +79,6 @@ class FacesMaster(controller.Master):
 		msg.reply()
 
 	def handle_response(self, msg):
-		#print msg.request.client_conn.address
 		# Process replies from Internet servers to users
 		if msg.headers["content-type"] == ["image/jpeg"] and msg.code == 200:
 			try:
@@ -104,10 +106,10 @@ class FacesMaster(controller.Master):
 
 		msg.reply()
 
-config = proxy.ProxyConfig(
-	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+config = ProxyConfig(
+	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
 )
-server = proxy.ProxyServer(config, 8080)
+server = ProxyServer(config, 8080)
 m = FacesMaster(server)
 m.run()
 
