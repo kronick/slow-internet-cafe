@@ -48,8 +48,10 @@ class SimilarMaster(controller.Master):
 		#print msg.flow.request.headers
 		#if msg.flow.request.headers["X-Do-Not-Replace"]:
 		#	print "Ignoring this image to avoid infinite loop..."
-
-		if (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"] and images_processed++ % options["frequency"] == 0:
+		is_image = (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"]
+		if is_image: images_processed += 1
+		should_process = (images_processd % options["frequency"] == 0)
+		if is_image and should_process:
 			try:
 				# Make this threaded:
 				reply = msg.reply
