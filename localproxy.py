@@ -48,8 +48,6 @@ class LocalMaster(controller.Master):
 				msg.reply.q = reply.q
 
 			def run():
-				print dir(msg)
-				print msg.headers
 				# Only worry about HTML for now (and ignore 301/302 redirects)
 				content_type = " ".join(msg.headers["content-type"])
 				if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type and msg.flow.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
