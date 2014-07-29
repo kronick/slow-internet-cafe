@@ -39,6 +39,10 @@ class LocalMaster(controller.Master):
 	def handle_response(self, msg):
 		# Process replies from Internet servers to clients
 		# ------------------------------------------------
+		content_type = " ".join(msg.headers["content-type"])
+		if content_type is None or "text/html" not in content_type:
+			msg.reply()
+			return
 		try:
 			# Make this threaded:
 			reply = msg.reply
