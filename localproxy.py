@@ -131,5 +131,6 @@ config = ProxyConfig(
 #config = None
 server = ProxyServer(config, 8080)
 m = LocalMaster(server)
+print "Proxy server loaded."
 m.run()
 
