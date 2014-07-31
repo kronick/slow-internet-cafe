@@ -52,26 +52,25 @@ class BlackoutMaster(controller.Master):
 			if hasattr(reply, "q"):
 				msg.reply.q = reply.q
 
+			# -- Begin Thread
 			def run():
-
 				# Check if the requested URL is already in the database
-				url = msg.flow.request.get_url().lower()
+				req = msg.flow.request
+				url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
 				
 				db = sqlite3.connect("db/blackout.db")
 				cursor = db.cursor()
 				cursor.execute('''SELECT url, last_accessed, life_remaining FROM resources WHERE url=?''', (url,))
 				resource = cursor.fetchone()
 				
-
 				if resource is None:
 					# If not, add the URL to the database with current timestamp
 					# and pass the page on as usual
 
 					cursor.execute('''INSERT INTO resources(url, last_accessed, life_remaining) VALUES(?, ?, 0)''',
-														    (url, int(time())))
+															(url, int(time())))
 					db.commit()
 
-					pass
 				else:
 					# If yes in the database, was it accessed within the past 24 hours?
 					now = int(time())
@@ -126,16 +125,16 @@ class BlackoutMaster(controller.Master):
 						# "Dusk-A330" by mailer_diablo - Self-taken (Unmodified). Licensed under Creative Commons Attribution-Share Alike 3.0 via Wikimedia Commons - http://commons.wikimedia.org/wiki/File:Dusk-A330.JPG#mediaviewer/File:Dusk-A330.JPG.
 						
 						# Force unicode
-						#msg.content = msg.content.encode("utf-8")
-						#msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
+						msg.content = msg.content.encode("utf-8")
+						msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
 					
 						# Force uncompressed response
 						msg.headers["content-encoding"] = [""]
-
-
+						
 				db.close()
 				reply()
-
+				# ---- End Thread
+			
 			# Only worry about HTML for now and automatically follow redirects
 			content_type = " ".join(msg.headers["content-type"])
 			if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type:
@@ -145,8 +144,7 @@ class BlackoutMaster(controller.Master):
 
 		except Exception as e:
 			print e
-
-		#msg.reply()
+			msg.reply()
 
 config = ProxyConfig(
 	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
