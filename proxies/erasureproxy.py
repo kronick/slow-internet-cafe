@@ -1,6 +1,10 @@
+#coding=utf-8
+
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
+from libmproxy import platform
+from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 
 import os
 import cStringIO
@@ -106,9 +110,15 @@ class FacesMaster(controller.Master):
 
 		msg.reply()
 
+
 config = ProxyConfig(
-	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
+	confdir = "~/.mitmproxy",
+    http_form_in = "relative",
+	http_form_out = "relative",
+    get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
 )
+#config = None
 server = ProxyServer(config, 8080)
 m = FacesMaster(server)
 print "Proxy server loaded."

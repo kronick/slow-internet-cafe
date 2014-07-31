@@ -1,9 +1,15 @@
+# coding=utf-8
+from random import random, randrange, randint, shuffle
+import os
+
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
+from libmproxy import platform
+from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 
-from random import random, randrange, randint, shuffle
-import os
+from jinja2 import Environment, FileSystemLoader
+template_env = Environment(loader=FileSystemLoader("templates"))
 
 # TODO: Set these based on the surf report from San Diego or somewhere
 weather_params = {
@@ -110,11 +116,19 @@ class SurfMaster(controller.Master):
 
 		msg.reply()
 
+
+
 config = ProxyConfig(
-	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
+	confdir = "~/.mitmproxy",
+    http_form_in = "relative",
+	http_form_out = "relative",
+    get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
 )
+#config = None
 server = ProxyServer(config, 8080)
 m = SurfMaster(server)
 print "Proxy server loaded."
 m.run()
+
 

@@ -1,11 +1,8 @@
+# coding=utf-8
+
 # TODO:
 # [ ] Limit number of requests/threads per user
 # [ ] Better error handling/investigate crashes
-
-from libmproxy import controller, proxy
-from libmproxy.proxy.config import ProxyConfig
-from libmproxy.proxy.server import ProxyServer
-
 import os
 import threading
 import requests
@@ -13,6 +10,11 @@ import base64
 import httplib
 import json
 
+from libmproxy import controller, proxy
+from libmproxy.proxy.config import ProxyConfig
+from libmproxy.proxy.server import ProxyServer
+from libmproxy import platform
+from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 
 from bs4 import BeautifulSoup
 
@@ -143,8 +145,13 @@ class SimilarMaster(controller.Master):
 			msg.reply()
 
 config = ProxyConfig(
-	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
+	confdir = "~/.mitmproxy",
+    http_form_in = "relative",
+	http_form_out = "relative",
+    get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
 )
+#config = None
 server = ProxyServer(config, 8080)
 m = SimilarMaster(server)
 print "Proxy server loaded."

@@ -1,10 +1,14 @@
 from libmproxy import controller, proxy
+from libmproxy.proxy.config import ProxyConfig
+from libmproxy.proxy.server import ProxyServer
+from libmproxy import platform
+from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
+
 import os
 
-local_country_codes = ["es"]
-local_region_codes = ["*"]
+TRANSPARENT = True
 
-class LocalMaster(controller.Master):
+class TemplateMaster(controller.Master):
 	def __init__(self, server):
 		controller.Master.__init__(self, server)
 
@@ -31,22 +35,36 @@ class LocalMaster(controller.Master):
 		# ------------------------------------------------
 		try:
 			# Only worry about HTML for now
-			if msg.get_content_type() is not None and "text/html" in msg.get_content_type():
+			content_type = " ".join(msg.headers["content-type"])
+			if content_type is not None and "text/html" in content_type:
 				
 				# Just decode (probably un-gzip) and then re-encode the response contents
 				contents = msg.get_decoded_content()
 				msg.content = contents
-				msg.encode(msg.headers["content-encoding"][0])
+				
+				# Re-compress if requested
+				# msg.encode(msg.headers["content-encoding"][0])
+				
+				# Force uncompressed response
+				msg.headers["content-encoding"] = [""]
 
 		except Exception as e:
 			print e
 
 		msg.reply()
 
-config = proxy.ProxyConfig(
-	cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
-)
-server = proxy.ProxyServer(config, 8080)
-m = LocalMaster(server)
-m.run()
+if TRANSPARENT:
+	config = ProxyConfig(
+		confdir = "~/.mitmproxy",
+    	http_form_in = "relative",
+		http_form_out = "relative",
+    	get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
+	)
+else:
+	config = ProxyConfig(confdir = "~/.mitmproxy")
 
+#config = None
+server = ProxyServer(config, 8080)
+m = TemplateMaster(server)
+print "Proxy server loaded."
+m.run()

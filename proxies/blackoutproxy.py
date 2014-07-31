@@ -3,6 +3,8 @@
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
+from libmproxy import platform
+from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 
 import os
 import requests
@@ -12,6 +14,9 @@ import sqlite3
 
 from datetime import datetime, timedelta
 from time import time
+
+from jinja2 import Environment, FileSystemLoader
+template_env = Environment(loader=FileSystemLoader("templates"))
 
 class BlackoutMaster(controller.Master):
 	def __init__(self, server):
@@ -132,7 +137,7 @@ class BlackoutMaster(controller.Master):
 
 			# Only worry about HTML for now and automatically follow redirects
 			content_type = " ".join(msg.headers["content-type"])
-			if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type and msg.flow.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
+			if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type:
 				threading.Thread(target=run).start()
 			else:
 				reply()
@@ -143,8 +148,13 @@ class BlackoutMaster(controller.Master):
 		#msg.reply()
 
 config = ProxyConfig(
-	#cacert = os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")
+	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
+	confdir = "~/.mitmproxy",
+    http_form_in = "relative",
+	http_form_out = "relative",
+    get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
 )
+#config = None
 server = ProxyServer(config, 8080)
 m = BlackoutMaster(server)
 print "Proxy server loaded."

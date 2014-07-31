@@ -1,16 +1,15 @@
 # coding=utf-8
+import os
+import requests
+import json
+import threading
+import socket
 
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
 from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
-
-import os
-import requests
-import json
-import threading
-import socket
 
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
