@@ -81,7 +81,6 @@ class BlackoutMaster(controller.Master):
 						# and pass the page on as usual
 						cursor.execute('''UPDATE resources SET last_accessed = ? WHERE url = ?''', (now, url))
 						db.commit()
-						pass
 					else:
 						# If it was accessed in past 24 hours, display the blackout page with info
 						then_date = datetime.fromtimestamp(then)
@@ -121,7 +120,12 @@ class BlackoutMaster(controller.Master):
 
 
 						extras = "<span style='font-size:50%; line-height: 1.5em'>The page was already accessed {}.<br>It will not be available again {}.<br><i>PLEASE SEEK OTHER PATHS</i>".format(then_string, available_string)
-						msg.content = u"<html><body style='background: url(http://127.0.0.1:8000/static/img/dusk.jpg); background-size: 100%; background-position: bottom'>{}<div style='width: 900px; height: 300px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto; padding: 30px;'>{}<br>IS NOT AVAILABLE<br>{}</div></div></body></html>".format(script, url, extras)
+						
+						template = template_env.get_template("blackout/notavailable.html")
+
+						msg.content = template.render(url=url, access_time = then_string, hours=int(hours), minutes=int(minutes), seconds=int(seconds))
+
+						#msg.content = u"<html><body style='background: url(http://127.0.0.1:8000/static/img/dusk.jpg); background-size: 100%; background-position: bottom'>{}<div style='width: 900px; height: 300px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto; padding: 30px;'>{}<br>IS NOT AVAILABLE<br>{}</div></div></body></html>".format(script, url, extras)
 						# "Dusk-A330" by mailer_diablo - Self-taken (Unmodified). Licensed under Creative Commons Attribution-Share Alike 3.0 via Wikimedia Commons - http://commons.wikimedia.org/wiki/File:Dusk-A330.JPG#mediaviewer/File:Dusk-A330.JPG.
 						
 						# Force unicode
