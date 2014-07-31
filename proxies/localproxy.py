@@ -10,11 +10,12 @@ from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
 from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
+TRANSPARENT_SSL_PORTS = [443, 8433]
 
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
-TRANSPARENT_SSL_PORTS = [443, 8433]
+
 
 local_country_codes = ["es"]
 local_region_codes = ["*"]

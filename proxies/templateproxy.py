@@ -3,6 +3,7 @@ from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
 from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
+TRANSPARENT_SSL_PORTS = [443, 8433]
 
 import os
 
@@ -44,7 +45,7 @@ class TemplateMaster(controller.Master):
 				
 				# Re-compress if requested
 				# msg.encode(msg.headers["content-encoding"][0])
-				
+
 				# Force uncompressed response
 				msg.headers["content-encoding"] = [""]
 

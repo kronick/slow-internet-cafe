@@ -15,6 +15,7 @@ from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
 from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
+TRANSPARENT_SSL_PORTS = [443, 8433]
 
 from bs4 import BeautifulSoup
 
