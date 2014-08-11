@@ -8,19 +8,31 @@ from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
 import os
+import threading
 import cStringIO
-import cv2
+import cv2, numpy
 from random import randint, uniform
 
 from PIL import Image
 
-face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-eye_cascade = cv2.CascadeClassifier('haarcascade_eye.xml')
+face_cascade = cv2.CascadeClassifier('data/haarcascade_frontalface_default.xml')
+#eye_cascade = cv2.CascadeClassifier('data/haarcascade_eye.xml')
 
-def processedFace(file):
+imgid = 0
+TMP_DIR = "data/tmp/"
 
-  img = cv2.imread(file)
-  gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+dot = Image.open("../static/img/face-dot-white.png")
+
+def processedFace(data, ext):
+
+  #img = cv2.imread(TMP_DIR + file)
+  input_image = cStringIO.StringIO(data)
+  input_image.seek(0)
+  input_array = numpy.asarray(bytearray(input_image.read()), dtype=numpy.uint8)
+  gray = cv2.imdecode(input_array, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+  input_image.seek(0)
+  #gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
   faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
@@ -34,8 +46,7 @@ def processedFace(file):
   	return None
 
   # Use PIL to censor the image
-  image = Image.open(file)
-  dot = Image.open("face-dot-white.png")
+  image = Image.open(input_image)
 
   for(x,y,w,h) in faces:
   	scale = uniform(3,5)
@@ -46,22 +57,14 @@ def processedFace(file):
   	scaleddot = dot.copy().resize((w,w), Image.ANTIALIAS)
   	#scaleddot = scaleddot.rotate(randint(0,360))
   	image.paste(scaleddot, (x, y), scaleddot)
-  image.save("tmp.jpg")
-  f = open("tmp.jpg", 'r')
-  o = f.read()
-  f.close()
+  #image.save(TMP_DIR + "out_" + file)
+  #f = open(TMP_DIR + "out_" + file, 'r')
+  #o = f.read()
+  #f.close()
+  image_buffer = cStringIO.StringIO()
+  image.save(image_buffer, ext)
+  return image_buffer.getvalue()
 
-  return o
-
-  # for(x,y,w,h) in faces:
-  #   cv2.circle(img, (x+w/2, y+h/2), w, (100,100,240), -1, cv2.CV_AA)
-
-  # cv2.imwrite("tmp.jpg", img)
-  # f = open("tmp.jpg", 'r')
-  # o = f.read()
-  # f.close()
-
-  # return o
 
 class FacesMaster(controller.Master):
 	def __init__(self, server):
@@ -84,32 +87,49 @@ class FacesMaster(controller.Master):
 		msg.reply()
 
 	def handle_response(self, msg):
-		# Process replies from Internet servers to users
-		if msg.headers["content-type"] == ["image/jpeg"] and msg.code == 200:
-			try:
-				f = open("tmp_o.jpg", "w+")
-				f.write(msg.content)
-				f.close()
+		# Make a threaded reply
+		reply = msg.reply
+		m = msg
+		msg.reply = controller.DummyReply()
+		if hasattr(reply, "q"):
+			msg.reply.q = reply.q
 
-				msg.content = processedFace("tmp_o.jpg") or msg.content
+		def run():
+			# Only worry about images
+			content_type = " ".join(msg.headers["content-type"])
+			if msg.code != 200 or content_type is None or not ("image/jpeg" in content_type or "image/webp" in content_type):
+				reply()
+				return
+
+			try:
+				if "image/jpeg" in content_type:
+					ext = "JPEG"
+				else:
+					ext = "WEBP"
+				
+				global imgid
+				imgid += 1
+				filename = "tmp_{}.{}".format(imgid, ext)
+				
+				print "temp filename is " + filename
+
+				#f = open(TMP_DIR + filename, "w+")
+				#f.write(msg.content)
+				#f.close()
+
+				msg.content = processedFace(msg.content, ext) or msg.content
 				
 				# Don't cache
 				msg.headers["Pragma"] = ["no-cache"]
 				msg.headers["Cache-Control"] = ["no-cache, no-store"]
 
-				#img = cv2.imread("tmp_o.jpg")
-				#gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-				
-				#cv2.imwrite("tmp.jpg", gray)
-				#f = open("tmp.jpg", 'r')
-				#msg.content = f.read()
-				#f.close()
-
 			except Exception as e:
 				print "Error processing image: {}".format(e)
 
-		msg.reply()
+			print "Replying with image..."
+			reply()
+
+		threading.Thread(target=run).start()
 
 
 config = ProxyConfig(
