@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 from PIL import Image
 
 options = {
-	"frequency": 3,	# Only replace every nth image
+	"frequency": 1,	# Only replace every nth image
 	"smallest_image": 5000, # Only consider images larger than this many bytes
 }
 
@@ -148,9 +148,7 @@ class SimilarMaster(controller.Master):
 config = ProxyConfig(
 	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
 	confdir = "~/.mitmproxy",
-    http_form_in = "relative",
-	http_form_out = "relative",
-    get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
+	mode = "transparent"
 )
 #config = None
 server = ProxyServer(config, 8080)
