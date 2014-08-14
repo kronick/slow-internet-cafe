@@ -9,6 +9,7 @@ import requests
 import base64
 import httplib
 import json
+import random
 
 import time
 
@@ -69,9 +70,10 @@ class SimilarMaster(controller.Master):
             images_pending += 1
             req = msg.flow.request
             url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
-            print "Processing " + url
+            
             if images_pending > 10:
               print "(!!! {} images in the queue...)".format(images_pending)
+            
             try:
                 # Make this threaded:
                 reply = msg.reply
@@ -92,7 +94,7 @@ class SimilarMaster(controller.Master):
 
                     search_url = "http://images.google.com/searchbyimage/upload"
                     filename = "similar.jpg"
-                    image_content = base64.b64encode(msg.content, "-_")
+                    image_content = base64.b64encode(msg.get_decoded_content(), "-_")
                     
                     request_headers = {
                          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -126,13 +128,16 @@ class SimilarMaster(controller.Master):
                             if(similar_section is not None):
                                 similar_elements = similar_section.find_all("li")
 
-                                similar_url = json.loads(similar_elements[0].find(class_="rg_meta").text)["ou"]
+                                n_similar = len(similar_elements)
+                                chosen_similar = similar_elements[random.randint(0,n_similar-1)]
+    
+                                similar_url = json.loads(chosen_similar.find(class_="rg_meta").text)["ou"]
 
-                                print "Replacing with <{}>".format(similar_url)
+                                #print "Replacing with <{}>".format(similar_url)
                                 t1 = time.time()
                                 img = requests.get(similar_url, headers={"X-Do-Not-Replace": "True"})
                                 t2 = time.time()
-                                print "Image downloaded in in {:0.3f} s".format(t2-t1)
+                                print "{}\n--> downloaded in in {:0.3f} s".format(similar_url[-8:], t2-t1)
                                 msg.content = img.content
                         
                                 # Force uncompressed response
@@ -141,13 +146,13 @@ class SimilarMaster(controller.Master):
                                 msg.headers["Pragma"] = ["no-cache"]
                                 msg.headers["Cache-Control"] = ["no-cache, no-store"]
                             else:
-                                print "Could not find any similar images."
+                                print "!!! Could not find any similar images."
 
                         except Exception as e:
                             print e
 
                     except requests.exceptions.Timeout:
-                        print "Request taking too long... abort!"
+                        print "!!! Request taking too long... abort!"
 
                     #print similar_url
                     
