@@ -1,5 +1,7 @@
 #coding=utf-8
 
+#TODO: WEBP isn't working... OpenCV doesn't like loading the images?
+
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
@@ -15,7 +17,8 @@ from random import randint, uniform
 
 from PIL import Image
 
-face_cascade = cv2.CascadeClassifier('data/haarcascade_frontalface_default.xml')
+import time
+
 #eye_cascade = cv2.CascadeClassifier('data/haarcascade_eye.xml')
 
 imgid = 0
@@ -25,14 +28,16 @@ TMP_DIR = "data/tmp/"
 dot = Image.open("../static/img/face-dot-white.png")
 
 def processedFace(data, ext):
-
-  #img = cv2.imread(TMP_DIR + file)
+  # Because we're running asynchronously, we need to load the classifier for each image
+  face_cascade = cv2.CascadeClassifier('data/haarcascade_frontalface_default.xml')
+  
+  # OpenCV wants a file-like object so create one from the data string
   input_image = cStringIO.StringIO(data)
   input_image.seek(0)
   input_array = numpy.asarray(bytearray(input_image.read()), dtype=numpy.uint8)
   gray = cv2.imdecode(input_array, cv2.CV_LOAD_IMAGE_GRAYSCALE)
   input_image.seek(0)
-  #gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
 
   faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
@@ -116,9 +121,9 @@ class FacesMaster(controller.Master):
 				#f = open(TMP_DIR + filename, "w+")
 				#f.write(msg.content)
 				#f.close()
-
-				msg.content = processedFace(msg.content, ext) or msg.content
 				
+				msg.content = processedFace(msg.content, ext) or msg.content
+
 				# Don't cache
 				msg.headers["Pragma"] = ["no-cache"]
 				msg.headers["Cache-Control"] = ["no-cache, no-store"]
@@ -130,14 +135,15 @@ class FacesMaster(controller.Master):
 			reply()
 
 		threading.Thread(target=run).start()
-
+		#run()
 
 config = ProxyConfig(
 	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
 	confdir = "~/.mitmproxy",
-    http_form_in = "relative",
-	http_form_out = "relative",
-    get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
+	mode = "transparent"
+    #http_form_in = "relative",
+	#http_form_out = "relative",
+    #get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
 )
 #config = None
 server = ProxyServer(config, 8080)

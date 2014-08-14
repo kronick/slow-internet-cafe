@@ -57,9 +57,7 @@ class TemplateMaster(controller.Master):
 if TRANSPARENT:
 	config = ProxyConfig(
 		confdir = "~/.mitmproxy",
-    	http_form_in = "relative",
-		http_form_out = "relative",
-    	get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
+		mode = "transparent"
 	)
 else:
 	config = ProxyConfig(confdir = "~/.mitmproxy")

@@ -165,9 +165,8 @@ class SimilarMaster(controller.Master):
 config = ProxyConfig(
 	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
 	confdir = "~/.mitmproxy",
-    http_form_in = "absolute",
-	http_form_out = "relative",
-    #get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
+	mode = "transparent"
+
 )
 #config = None
 server = ProxyServer(config, 8080)
