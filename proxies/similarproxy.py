@@ -10,6 +10,8 @@ import base64
 import httplib
 import json
 
+import time
+
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
@@ -22,8 +24,9 @@ from bs4 import BeautifulSoup
 from PIL import Image
 
 options = {
-	"frequency": 3,	# Only replace every nth image
+	"frequency": 1,	# Only replace every nth image
 	"smallest_image": 5000, # Only consider images larger than this many bytes
+	"request_timeout": 15,
 }
 
 images_processed = 0
@@ -94,39 +97,53 @@ class SimilarMaster(controller.Master):
 						 "Cache-Control": "max-age=0",
 						 "Origin": "http://images.google.com",
 						 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
-						 "X-Client-Data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
+						 #"X-Client-Data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
 						 "Referer": "http://images.google.com/",
 						 "Accept-Encoding": "gzip,deflate,sdch",
 						 "Accept-Language": "en-US,en;q=0.8"
 					}
 
-					r = requests.post(search_url,
-						files={"image_url": "", "encoded_image": "", "image_content": image_content, "filename": filename},
-						headers = request_headers)
-
-					try:
-						soup = BeautifulSoup(r.text)
-						
-						similar_section = soup.find(id="iur")
-						if(similar_section is not None):
-							similar_elements = similar_section.find_all("li")
-
-							similar_url = json.loads(similar_elements[0].find(class_="rg_meta").text)["ou"]
-
-							print "Replacing with <{}>".format(similar_url)
-							img = requests.get(similar_url, headers={"X-Do-Not-Replace": "True"})
-							msg.content = img.content
 					
-							# Force uncompressed response
-							msg.headers["content-encoding"] = [""]
-							# And don't cache
-							msg.headers["Pragma"] = ["no-cache"]
-							msg.headers["Cache-Control"] = ["no-cache, no-store"]
-						else:
-							print "Could not find any similar images."
+					try:
+						t1 = time.time()
+						r = requests.post(search_url,
+							files={"image_url": "", "encoded_image": "", "image_content": image_content, "filename": filename},
+							headers = request_headers,
+							timeout = options["request_timeout"])
+						t2 = time.time()
 
-					except Exception as e:
-						print e
+						print "Google request made in {:0.3f} s".format(t2-t1)
+						
+
+						try:
+							soup = BeautifulSoup(r.text)
+							
+							similar_section = soup.find(id="iur")
+							if(similar_section is not None):
+								similar_elements = similar_section.find_all("li")
+
+								similar_url = json.loads(similar_elements[0].find(class_="rg_meta").text)["ou"]
+
+								print "Replacing with <{}>".format(similar_url)
+								t1 = time.time()
+								img = requests.get(similar_url, headers={"X-Do-Not-Replace": "True"})
+								t2 = time.time()
+								print "Image downloaded in in {:0.3f} s".format(t2-t1)
+								msg.content = img.content
+						
+								# Force uncompressed response
+								msg.headers["content-encoding"] = [""]
+								# And don't cache
+								msg.headers["Pragma"] = ["no-cache"]
+								msg.headers["Cache-Control"] = ["no-cache, no-store"]
+							else:
+								print "Could not find any similar images."
+
+						except Exception as e:
+							print e
+
+					except requests.exceptions.Timeout:
+						print "Request taking too long... abort!"
 
 					#print similar_url
 					
@@ -148,9 +165,9 @@ class SimilarMaster(controller.Master):
 config = ProxyConfig(
 	#certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
 	confdir = "~/.mitmproxy",
-    http_form_in = "relative",
+    http_form_in = "absolute",
 	http_form_out = "relative",
-    get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
+    #get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
 )
 #config = None
 server = ProxyServer(config, 8080)
