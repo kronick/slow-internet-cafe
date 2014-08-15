@@ -5,6 +5,8 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
+from utils import concurrent
+
 import os
 
 TRANSPARENT = True
@@ -19,6 +21,7 @@ class TemplateMaster(controller.Master):
         except KeyboardInterrupt:
             self.shutdown()
 
+    @concurrent
     def handle_request(self, msg):
         # Process requests from clients to Internet servers
         # -------------------------------------------------
@@ -29,9 +32,13 @@ class TemplateMaster(controller.Master):
             del(msg.headers["if-none-match"])
             #print "NO-CACHE"
 
+        print "-> " + msg.get_url()
+
         msg.reply()
 
+    @concurrent
     def handle_response(self, msg):
+    	print "<- " + msg.flow.request.get_url()
         # Process replies from Internet servers to clients
         # ------------------------------------------------
         try:
@@ -57,7 +64,7 @@ class TemplateMaster(controller.Master):
 if TRANSPARENT:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
-        mode = "transparent"
+        #mode = "transparent"
     )
 else:
     config = ProxyConfig(confdir = "~/.mitmproxy")

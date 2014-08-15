@@ -20,6 +20,8 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
+from utils import concurrent
+
 from bs4 import BeautifulSoup
 
 from PIL import Image
@@ -75,95 +77,7 @@ class SimilarMaster(controller.Master):
               print "(!!! {} images in the queue...)".format(images_pending)
             
             try:
-                # Make this threaded:
-                reply = msg.reply
-                m = msg
-                msg.reply = controller.DummyReply()
-                if hasattr(reply, "q"):
-                    msg.reply.q = reply.q
-
-                def run():
-                    global images_pending
-                    # [ ] Better error handling/investigate crashes
-                    # Make a POST request with multipart/form and following fields:
-                    # filename: whatever.jpg
-                    # image_content: base_64 encoded data with "-_" instead of "+/"
-                    # encoded_image: None
-                    # image_url: None
-                    # And original headers
-
-                    search_url = "http://images.google.com/searchbyimage/upload"
-                    filename = "similar.jpg"
-                    image_content = base64.b64encode(msg.get_decoded_content(), "-_")
-                    
-                    request_headers = {
-                         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                         "Proxy-Connection": "keep-alive",
-                         "Cache-Control": "max-age=0",
-                         "Origin": "http://images.google.com",
-                         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
-                         #"X-Client-Data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
-                         "Referer": "http://images.google.com/",
-                         "Accept-Encoding": "gzip,deflate,sdch",
-                         "Accept-Language": "en-US,en;q=0.8"
-                    }
-
-                    
-                    try:
-                        t1 = time.time()
-                        r = requests.post(search_url,
-                            files={"image_url": "", "encoded_image": "", "image_content": image_content, "filename": filename},
-                            headers = request_headers,
-                            timeout = options["request_timeout"])
-                        t2 = time.time()
-
-
-                        print "Google request made in {:0.3f} s".format(t2-t1)
-                        
-
-                        try:
-                            soup = BeautifulSoup(r.text)
-                            
-                            similar_section = soup.find(id="iur")
-                            if(similar_section is not None):
-                                similar_elements = similar_section.find_all("li")
-
-                                n_similar = len(similar_elements)
-                                chosen_similar = similar_elements[random.randint(0,n_similar-1)]
-    
-                                similar_url = json.loads(chosen_similar.find(class_="rg_meta").text)["ou"]
-
-                                #print "Replacing with <{}>".format(similar_url)
-                                t1 = time.time()
-                                img = requests.get(similar_url, headers={"X-Do-Not-Replace": "True"})
-                                t2 = time.time()
-                                print "{}\n--> downloaded in in {:0.3f} s".format(similar_url[-8:], t2-t1)
-                                msg.content = img.content
-                        
-                                # Force uncompressed response
-                                msg.headers["content-encoding"] = [""]
-                                # And don't cache
-                                msg.headers["Pragma"] = ["no-cache"]
-                                msg.headers["Cache-Control"] = ["no-cache, no-store"]
-                            else:
-                                print "!!! Could not find any similar images."
-
-                        except Exception as e:
-                            print e
-
-                    except requests.exceptions.Timeout:
-                        print "!!! Request taking too long... abort!"
-
-                    #print similar_url
-                    
-                    #print soup.text
-
-                    reply()
-                    images_pending -= 1
-
-
-                threading.Thread(target=run).start()
-
+                self.process_image(msg)
 
             except Exception as e:
                 print "Error processing image: {}".format(e)
@@ -171,10 +85,86 @@ class SimilarMaster(controller.Master):
         else:
             msg.reply()
 
+	@concurrent    
+    def process_image(self, msg):
+        global images_pending
+        # [ ] Better error handling/investigate crashes
+        # Make a POST request with multipart/form and following fields:
+        # filename: whatever.jpg
+        # image_content: base_64 encoded data with "-_" instead of "+/"
+        # encoded_image: None
+        # image_url: None
+        # And original headers
+
+        search_url = "http://images.google.com/searchbyimage/upload"
+        filename = "similar.jpg"
+        image_content = base64.b64encode(msg.get_decoded_content(), "-_")
+        
+        request_headers = {
+             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+             "Proxy-Connection": "keep-alive",
+             "Cache-Control": "max-age=0",
+             "Origin": "http://images.google.com",
+             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36",
+             #"X-Client-Data": "CMO1yQEIhLbJAQiitskBCKm2yQEIwbbJAQi4iMoBCOyIygEI9pPKAQ==",
+             "Referer": "http://images.google.com/",
+             "Accept-Encoding": "gzip,deflate,sdch",
+             "Accept-Language": "en-US,en;q=0.8"
+        }
+
+        
+        try:
+            t1 = time.time()
+            r = requests.post(search_url,
+                files={"image_url": "", "encoded_image": "", "image_content": image_content, "filename": filename},
+                headers = request_headers,
+                timeout = options["request_timeout"])
+            t2 = time.time()
+
+
+            print "Google request made in {:0.3f} s".format(t2-t1)
+            
+
+            try:
+                soup = BeautifulSoup(r.text)
+                
+                similar_section = soup.find(id="iur")
+                if(similar_section is not None):
+                    similar_elements = similar_section.find_all("li")
+
+                    n_similar = len(similar_elements)
+                    chosen_similar = similar_elements[random.randint(0,n_similar-1)]
+
+                    similar_url = json.loads(chosen_similar.find(class_="rg_meta").text)["ou"]
+
+                    #print "Replacing with <{}>".format(similar_url)
+                    t1 = time.time()
+                    img = requests.get(similar_url, headers={"X-Do-Not-Replace": "True"})
+                    t2 = time.time()
+                    print "{}\n--> downloaded in in {:0.3f} s".format(similar_url[-8:], t2-t1)
+                    msg.content = img.content
+            
+                    # Force uncompressed response
+                    msg.headers["content-encoding"] = [""]
+                    # And don't cache
+                    msg.headers["Pragma"] = ["no-cache"]
+                    msg.headers["Cache-Control"] = ["no-cache, no-store"]
+                else:
+                    print "!!! Could not find any similar images."
+
+            except Exception as e:
+                print e
+
+        except requests.exceptions.Timeout:
+            print "!!! Request taking too long... abort!"
+
+        images_pending -= 1
+
+
 config = ProxyConfig(
     #certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
     confdir = "~/.mitmproxy",
-    mode = "transparent"
+    #mode = "transparent"
 
 )
 #config = None

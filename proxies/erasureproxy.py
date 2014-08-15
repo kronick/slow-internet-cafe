@@ -9,6 +9,8 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
+from utils import concurrent
+
 import os
 import threading
 import cStringIO
@@ -88,56 +90,37 @@ class FacesMaster(controller.Master):
 
         msg.reply()
 
+    @concurrent    
     def handle_response(self, msg):
-        # Make a threaded reply
-        reply = msg.reply
-        m = msg
-        msg.reply = controller.DummyReply()
-        if hasattr(reply, "q"):
-            msg.reply.q = reply.q
+        # Only worry about images
+        content_type = " ".join(msg.headers["content-type"])
+        if msg.code != 200 or content_type is None or not ("image/jpeg" in content_type or "image/webp" in content_type):
+            return
 
-        def run():
-            # Only worry about images
-            content_type = " ".join(msg.headers["content-type"])
-            if msg.code != 200 or content_type is None or not ("image/jpeg" in content_type or "image/webp" in content_type):
-                reply()
-                return
+        try:
+            if "image/jpeg" in content_type:
+                ext = "JPEG"
+            else:
+                ext = "WEBP"
 
-            try:
-                if "image/jpeg" in content_type:
-                    ext = "JPEG"
-                else:
-                    ext = "WEBP"
-                
-                global imgid
-                imgid += 1
-                filename = "tmp_{}.{}".format(imgid, ext)
-                
-                print "temp filename is " + filename
+            msg.content = processedFace(msg.get_decoded_content(), ext) or msg.content
+            
+            # Force uncompressed response
+            msg.headers["content-encoding"] = [""]
+            # Don't cache
+            msg.headers["Pragma"] = ["no-cache"]
+            msg.headers["Cache-Control"] = ["no-cache, no-store"]
 
-                #f = open(TMP_DIR + filename, "w+")
-                #f.write(msg.content)
-                #f.close()
-                
-                msg.content = processedFace(msg.content, ext) or msg.content
+        except Exception as e:
+            print "Error processing image: {}".format(e)
 
-                # Don't cache
-                msg.headers["Pragma"] = ["no-cache"]
-                msg.headers["Cache-Control"] = ["no-cache, no-store"]
-
-            except Exception as e:
-                print "Error processing image: {}".format(e)
-
-            print "Replying with image..."
-            reply()
-
-        threading.Thread(target=run).start()
-        #run()
+        print "Replying with image..."
+        
 
 config = ProxyConfig(
     #certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
     confdir = "~/.mitmproxy",
-    mode = "transparent"
+    #mode = "transparent"
     #http_form_in = "relative",
     #http_form_out = "relative",
     #get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
