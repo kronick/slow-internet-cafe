@@ -27,22 +27,24 @@ class TemplateMaster(controller.Master):
         # -------------------------------------------------
 
         # Don't allow cached HTML requests, but go ahead and cache CSS, JS, images, etc
-        if "text/html" in "".join(msg.headers["accept"]):
-            del(msg.headers["if-modified-since"])
-            del(msg.headers["if-none-match"])
+        #if "text/html" in "".join(msg.headers["accept"]):
+        #    del(msg.headers["if-modified-since"])
+        #    del(msg.headers["if-none-match"])
             #print "NO-CACHE"
 
-        print "-> " + msg.get_url()
+        #print "-> " + msg.get_url()
 
         msg.reply()
 
     @concurrent
     def handle_response(self, msg):
-    	print "<- " + msg.flow.request.get_url()
+    	#print "<- " + msg.flow.request.get_url()
         # Process replies from Internet servers to clients
         # ------------------------------------------------
         try:
             # Only worry about HTML for now
+            content_type = " ".join(msg.headers["content-type"])
+            
             content_type = " ".join(msg.headers["content-type"])
             if content_type is not None and "text/html" in content_type:
                 

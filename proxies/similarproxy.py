@@ -85,7 +85,7 @@ class SimilarMaster(controller.Master):
         else:
             msg.reply()
 
-	@concurrent    
+    @concurrent    
     def process_image(self, msg):
         global images_pending
         # [ ] Better error handling/investigate crashes
