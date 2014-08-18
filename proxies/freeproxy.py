@@ -17,11 +17,11 @@ from bs4 import BeautifulSoup
 
 TRANSPARENT = False
 
-currency_pattern = re.compile(r'''
+currency_pattern = re.compile(ur'''
     (
-        (?P<before>^|\s|\(|>)                                           # beginning of match condition
-        (?P<value>
-            (\$|EUR(\ ?)|EU(\ ?)|£|€)                               # Currency type up front
+        (?P<before>^|\s|\(|>)                               # beginning of match condition
+        (?P<value>(
+            (\$|EUR(\ ?)|EU(\ ?)|£|€)                       # Currency type up front
             (?=\d)                                          # Make sure SOME number is coming...
             (
                 (\d{1,3})?                                  # Variable length of digits one or more times
@@ -30,9 +30,21 @@ currency_pattern = re.compile(r'''
             ([,.](\d{1,2}))?                                # optional cents
             (\ billion|\ trillion|\ billón|\ millardo|\ )?  # optional text description
         )
-        (?P<after>$|[.,!?)]|\s|\<|&(\w){1,6};)                                      # end of match condition
+        |                                                   # ---------- OR with currency AFTER the number
+        (
+            (?=\d)                                          # Make sure SOME number is coming...
+            (
+                (\d{1,3})?                                  # Variable length of digits one or more times
+                ([,.]\d{3})*                                # optional thousands separators and 3 digit groups
+            )                                               
+            ([,.](\d{1,2}))?                                # optional cents
+            (\ billion|\ trillion|\ billón|\ millardo|\ )?  # optional text description
+            ((\ ?)EUR|(\ ?)EU|(\ ?)€|\ dollars|\ euros)     # Currency type at end
+        ))        
+        (?P<after>$|[.,!?)]|\s|\<|&(\w){1,6};)              # end of match condition
     )
 ''', (re.VERBOSE |re.UNICODE))
+
 
 class FreeMaster(controller.Master):
     def __init__(self, server):
@@ -75,6 +87,8 @@ class FreeMaster(controller.Master):
                 
                 # Decode contents (if gzip'ed)
                 contents = msg.get_decoded_content()
+                #contents = "<p>€32</p>"
+                #charset = "utf-8"
 
                 soup = process_as_html(contents,  charset = charset)
 
