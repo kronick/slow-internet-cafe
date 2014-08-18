@@ -26,6 +26,8 @@ from bs4 import BeautifulSoup
 
 from PIL import Image
 
+from config import config
+
 options = {
     "frequency": 1, # Only replace every nth image
     "smallest_image": 5000, # Only consider images larger than this many bytes
@@ -161,13 +163,14 @@ class SimilarMaster(controller.Master):
         images_pending -= 1
 
 
-config = ProxyConfig(
-    #certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
-    confdir = "~/.mitmproxy",
-    #mode = "transparent"
+if config["transparent_mode"]:
+    config = ProxyConfig(
+        confdir = "~/.mitmproxy",
+        mode = "transparent"
+    )
+else:
+    config = ProxyConfig(confdir = "~/.mitmproxy")
 
-)
-#config = None
 server = ProxyServer(config, 8080)
 m = SimilarMaster(server)
 print "Proxy server loaded."

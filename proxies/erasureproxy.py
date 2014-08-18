@@ -20,6 +20,7 @@ from random import randint, uniform
 from PIL import Image
 
 import time
+from config import config
 
 #eye_cascade = cv2.CascadeClassifier('data/haarcascade_eye.xml')
 
@@ -117,15 +118,15 @@ class FacesMaster(controller.Master):
         print "Replying with image..."
         
 
-config = ProxyConfig(
-    #certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
-    confdir = "~/.mitmproxy",
-    #mode = "transparent"
-    #http_form_in = "relative",
-    #http_form_out = "relative",
-    #get_upstream_server = TransparentUpstreamServerResolver(platform.resolver(), TRANSPARENT_SSL_PORTS)
-)
-#config = None
+if config["transparent_mode"]:
+    config = ProxyConfig(
+        confdir = "~/.mitmproxy",
+        mode = "transparent"
+    )
+else:
+    config = ProxyConfig(confdir = "~/.mitmproxy")
+
+
 server = ProxyServer(config, 8080)
 m = FacesMaster(server)
 print "Proxy server loaded."

@@ -6,8 +6,10 @@ from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
 from utils import concurrent
+from config import config
 
 import os
+
 
 TRANSPARENT = True
 
@@ -63,10 +65,10 @@ class TemplateMaster(controller.Master):
 
         msg.reply()
 
-if TRANSPARENT:
+if config["transparent_mode"]:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
-        #mode = "transparent"
+        mode = "transparent"
     )
 else:
     config = ProxyConfig(confdir = "~/.mitmproxy")

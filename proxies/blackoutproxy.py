@@ -21,6 +21,8 @@ from time import time
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
+from config import config
+
 class BlackoutMaster(controller.Master):
     def __init__(self, server):
         controller.Master.__init__(self, server)
@@ -141,12 +143,14 @@ class BlackoutMaster(controller.Master):
         db.close()
 
 
-config = ProxyConfig(
-    #certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
-    confdir = "~/.mitmproxy",
-    #mode = "transparent"
-)
-#config = None
+if config["transparent_mode"]:
+    config = ProxyConfig(
+        confdir = "~/.mitmproxy",
+        mode = "transparent"
+    )
+else:
+    config = ProxyConfig(confdir = "~/.mitmproxy")
+
 server = ProxyServer(config, 8080)
 m = BlackoutMaster(server)
 print "Proxy server loaded."

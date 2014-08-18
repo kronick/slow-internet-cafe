@@ -16,6 +16,8 @@ from bs4 import BeautifulSoup
 
 from random import choice, random
 
+from config import config
+
 TRANSPARENT = False
 
 collapse_whitespace_rex = re.compile(r'\s+')
@@ -232,7 +234,7 @@ def process_as_html(contents, charset):
     return soup
 
 
-if TRANSPARENT:
+if config["transparent_mode"]:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
         mode = "transparent"
@@ -240,7 +242,6 @@ if TRANSPARENT:
 else:
     config = ProxyConfig(confdir = "~/.mitmproxy")
 
-#config = None
 server = ProxyServer(config, 8080)
 m = FreeMaster(server)
 print "Proxy server loaded."

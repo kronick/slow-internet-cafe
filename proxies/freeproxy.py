@@ -16,8 +16,8 @@ import json
 from bs4 import BeautifulSoup
 
 from Adblock import Filter
+from config import config
 
-TRANSPARENT = False
 
 currency_pattern = re.compile(ur'''
     (
@@ -199,15 +199,6 @@ def censor_currency_match(match):
 
     return (unicode(g["before"]) + censored + unicode(g["after"]))
 
-if TRANSPARENT:
-    config = ProxyConfig(
-        confdir = "~/.mitmproxy",
-        mode = "transparent"
-    )
-else:
-    config = ProxyConfig(confdir = "~/.mitmproxy")
-
-
 # HTML and JSON handlers
 # ----------------------------------------------------------
 def process_html_in_json(j, charset):
@@ -286,8 +277,14 @@ def process_as_html(contents, charset):
     return soup
        
 
+if config["transparent_mode"]:
+    config = ProxyConfig(
+        confdir = "~/.mitmproxy",
+        mode = "transparent"
+    )
+else:
+    config = ProxyConfig(confdir = "~/.mitmproxy")
 
-#config = None
 server = ProxyServer(config, 8080)
 m = FreeMaster(server)
 print "Proxy server loaded."

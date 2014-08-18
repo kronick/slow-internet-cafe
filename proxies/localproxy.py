@@ -17,7 +17,7 @@ from utils import concurrent
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
-
+from config import config
 
 local_country_codes = ["es"]
 local_region_codes = ["*"]
@@ -134,12 +134,15 @@ class LocalMaster(controller.Master):
             print e
 
 
-config = ProxyConfig(
-    #certs = [os.path.expanduser("~/.mitmproxy/mitmproxy-ca.pem")]
-    confdir = "~/.mitmproxy",
-    #mode = "transparent"
-)
-#config = None
+if config["transparent_mode"]:
+    config = ProxyConfig(
+        confdir = "~/.mitmproxy",
+        mode = "transparent"
+    )
+else:
+    config = ProxyConfig(confdir = "~/.mitmproxy")
+
+
 server = ProxyServer(config, 8080)
 m = LocalMaster(server)
 print "Proxy server loaded."
