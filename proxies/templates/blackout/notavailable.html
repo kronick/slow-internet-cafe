@@ -1,10 +1,105 @@
 <html>
-<body style='background: url(http://static-01.slow:8000/img/dusk.jpg); background-size: 100%; background-position: bottom'>
-<!-- # "Dusk-A330" by mailer_diablo - Self-taken (Unmodified). Licensed under Creative Commons Attribution-Share Alike 3.0 via Wikimedia Commons - http://commons.wikimedia.org/wiki/File:Dusk-A330.JPG#mediaviewer/File:Dusk-A330.JPG. -->
+<head>
+<script src="http://static-01.slow:8000/scripts/jquery-1.11.1.min.js" type="text/javascript"></script>
+<script src="http://static-01.slow:8000/scripts/jquery-svg/jquery.svg.js" type="text/javascript"></script>
+<script src="http://static-01.slow:8000/scripts/jquery-svg/jquery.svganim.js" type="text/javascript"></script>
+<link rel="stylesheet" type="text/css" href="http://static-01.slow:8000/scripts/jquery-svg/jquery.svg.css"> 
+<script type="text/javascript">
+remaining_seconds = start_seconds = {{ seconds }}
+remaining_minutes = start_minutes = {{ minutes }}
+remaining_hours = start_hours = {{ hours }}
+$(document).ready(function() {
+    $("#overlay").css("display", "none");
+    $("#overlay").delay(3000).fadeIn(2000);
+    $("#svgContainer").svg();
+    startClock($("#svgContainer").svg('get'))
+});
+
+seconds_angle = remaining_seconds / 60 * 360 + 180;
+minutes_angle = remaining_minutes / 60 * 360 + 180;
+hours_angle   = remaining_hours   / 24 * 360 + 180;
+
+
+function startClock(svg) {
+    w = $(window).width()
+    h = $(window).height()
+    r = h * 0.45;
+    hours_x = Math.sin((hours_angle-180) * Math.PI/180) * r * .45;
+    hours_y = -Math.cos((hours_angle-180) * Math.PI/180) * r * .45;
+
+    console.log(hours_angle)
+    console.log(w + " x " + h)
+    clock_group = svg.group({transform: "translate(" + (w/2) + " " + (h/2) + ")"});
+    outer_circle = svg.circle(clock_group, 0,0,r, {fill: 'none', stroke: 'white'});
+    
+    path = svg.createPath();
+    arc_angle = hours_angle > 360 ? hours_angle : 1000+(hours_angle-180);
+    arc_angle = 0
+    console.log(hours_x + ", " + hours_y);
+    remaining_path = svg.path(clock_group, path.move(0,0).line(hours_x,hours_y).arc(r*.45,r*.45, 0, hours_angle > 360, false, 0, -r*0.45).close(), {fill: 'rgba(255,255,0,0.5)'}) 
+    
+    second_hand = svg.line(clock_group,0,0, 0,r*.9, {stroke: '#FF0080', strokeWidth: '2', transform: "rotate(" + seconds_angle + ")"});
+    $(second_hand).attr("id","secondHand");
+   
+    minute_group = svg.group(clock_group,{transform: "rotate(" + minutes_angle + ")"});
+    minute_hand = svg.line(minute_group,0,0, 0,r*.8, {stroke: '#0080FF', strokeWidth: '2'});
+    
+    hour_group = svg.group(clock_group,{transform: "rotate(" + hours_angle + ")"});
+    hour_hand = svg.line(hour_group,0,0, 0,r*.45, {stroke: '#FFFF00', strokeWidth: '2'});
+    
+    window.setInterval(moveHands, 1000)
+}
+
+
+function moveHands(){
+    seconds_angle -= 6;
+    $("#secondHand").animate({svgTransform: "rotate(" + seconds_angle + ")"}, 100)
+
+}
+</script>
+<style>
+body {
+    background: url(http://static-01.slow:8000/img/dusk.jpg);
+    background-size: 100%;
+    background-position: bottom;
+
+    /* "Dusk-A330" by mailer_diablo - Self-/taken (Unmodified). Licensed under Creative Commons Attribution-Share Alike 3.0 via Wikimedia Commons - http://commons.wikimedia.org/wiki/File:Dusk-A330.JPG#mediaviewer/File:Dusk-A330.JPG. */
+    
+}
+#svgContainer {
+    width: 100%;
+    height: 100%;
+}
+
+#overlayContainer {
+    width: 100%;
+    height: 300px;
+    margin: auto;
+    position: absolute;
+    left:0; right:0; top:0; bottom:0;
+    text-align: center;
+    font-size: 28pt;
+    font-family: "Ubuntu", sans-serif;
+    font-weight: bold;
+    color: white;
+    line-height: 1.5em;
+    text-shadow: black 0 0 40px;
+}
+#overlay {
+    background: rgba(0,0,0,0.5);
+    width: auto;
+    padding: 30px;
+    word-wrap: break-word;
+}
+
+</style>
+</head>
+<body>
 	<script type='text/javascript'>setInterval(function() { h = document.getElementById('h').innerHTML; m = document.getElementById('m').innerHTML; s = document.getElementById('s').innerHTML; if(s > 0) document.getElementById('s').innerHTML = (s - 1); else if(m > 0) { document.getElementById('s').innerHTML = '59'; document.getElementById('m').innerHTML = (m-1); } else { document.getElementById('s').innerHTML = '59'; document.getElementById('m').innerHTML = '59'; document.getElementById('h').innerHTML = (h-1); } }, 1000);
 	</script>
-	<div style='width: 900px; height: 300px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'>
-		<div style='background: rgba(0,0,0,.5); width: auto; padding: 30px;'>
+    <div id="svgContainer"></div>
+    <div id="overlayContainer">
+        <div id="overlay">
 			{{ url }}<br>IS NOT AVAILABLE<br>
 			<span style='font-size:50%; line-height: 1.5em'>
 				The page was already accessed {{ access_time }}.<br>
