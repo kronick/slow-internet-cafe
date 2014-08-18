@@ -15,20 +15,22 @@ import json
 
 from bs4 import BeautifulSoup
 
+from Adblock import Filter
+
 TRANSPARENT = False
 
 currency_pattern = re.compile(ur'''
     (
         (?P<before>^|\s|\(|>)                               # beginning of match condition
         (?P<value>(
-            (\$|EUR(\ ?)|EU(\ ?)|£|€)                       # Currency type up front
+            (\$|EUR(\s?)|EU(\s?)|£|€)                       # Currency type up front
             (?=\d)                                          # Make sure SOME number is coming...
             (
                 (\d{1,3})?                                  # Variable length of digits one or more times
                 ([,.]\d{3})*                                # optional thousands separators and 3 digit groups
             )                                               
             ([,.](\d{1,2}))?                                # optional cents
-            (\ billion|\ trillion|\ billón|\ millardo|\ )?  # optional text description
+            (\sbillion|\strillion|\sbillón|\smillardo|\s)?  # optional text description
         )
         |                                                   # ---------- OR with currency AFTER the number
         (
@@ -38,12 +40,14 @@ currency_pattern = re.compile(ur'''
                 ([,.]\d{3})*                                # optional thousands separators and 3 digit groups
             )                                               
             ([,.](\d{1,2}))?                                # optional cents
-            (\ billion|\ trillion|\ billón|\ millardo|\ )?  # optional text description
-            ((\ ?)EUR|(\ ?)EU|(\ ?)€|\ dollars|\ euros)     # Currency type at end
+            (\sbillion|\strillion|\sbillón|\smillardo|\ )?  # optional text description
+            ((\s?)EUR|(\s?)EU|(\s?)€|\sdollars|\seuros)     # Currency type at end
         ))        
         (?P<after>$|[.,!?)]|\s|\<|&(\w){1,6};)              # end of match condition
     )
 ''', (re.VERBOSE |re.UNICODE))
+
+adblock_filter = Filter(file('data/easylist.txt'))
 
 
 class FreeMaster(controller.Master):
@@ -67,6 +71,10 @@ class FreeMaster(controller.Master):
             del(msg.headers["if-none-match"])
             #print "NO-CACHE"
 
+        url = "{}://{}{}".format(msg.get_scheme(), "".join(msg.headers["host"]), msg.path)
+        #if adblock_filter.match(url):
+        #    print url
+
         msg.reply()
 
     @concurrent
@@ -79,12 +87,33 @@ class FreeMaster(controller.Master):
 
             content_headers = [x.strip() for x in content_type.split(";")]
             charset = None
+            
+            req = msg.flow.request
+            url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
             for head in content_headers:
                 if head.startswith("charset="):
                     charset = head[8:].lower()
 
-            if content_type is not None and "text/html" in content_type:
-                
+            if content_type is not None and "jpg" in content_type or "png" in content_type or "jpeg" in content_type:
+                # Check to see if this is an ad
+                if adblock_filter.match(url):
+                    with open("../static/img/face-dot.png") as f:
+                        msg.content = f.read()
+                        # Force uncompressed response
+                        msg.headers["content-encoding"] = [""]
+                        msg.headers["content-type"] = ["image/png"]
+
+                        print url
+
+                        # Never cache  modified response
+                        msg.headers["Pragma"] = ["no-cache"]
+                        msg.headers["Cache-Control"] = ["no-cache, no-store"]         
+
+            elif content_type is not None and "text/html" in content_type:
+                if adblock_filter.match(url):
+                    msg.content = "!!!"
+                    return
+
                 # Decode contents (if gzip'ed)
                 contents = msg.get_decoded_content()
                 #contents = "<p>€32</p>"
@@ -101,14 +130,23 @@ class FreeMaster(controller.Master):
                 # Force unicode
                 msg.content = msg.content.encode("utf-8")
                 msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
+
+                # Never cache  modified response
+                msg.headers["Pragma"] = ["no-cache"]
+                msg.headers["Cache-Control"] = ["no-cache, no-store"]         
  
             # Handle JSON
             elif content_type is not None and "json" in content_type or "javascript" in content_type:
+                if adblock_filter.match(url):
+                    msg.content = "!!!"
+                    return
+                return
+
                 try:
                     j = json.loads(msg.get_decoded_content(),  encoding = charset)
                 except ValueError:
                     # Not really JSON
-                    print "this is not jsgon1!!"
+                    #print "this is not jsgon1!!"
                     return
                 return
 
@@ -121,7 +159,11 @@ class FreeMaster(controller.Master):
 
                 # Force unicode
                 msg.content = msg.content.encode("utf-8")
-                msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]                
+                msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]       
+
+                # Never cache  modified response
+                msg.headers["Pragma"] = ["no-cache"]
+                msg.headers["Cache-Control"] = ["no-cache, no-store"]         
 
         #except Exception as e:
         #    print repr(e)
@@ -211,7 +253,12 @@ def process_as_html(contents, charset):
         soup = BeautifulSoup(contents, "html5lib", from_encoding = charset) 
         
     # Get references to all strings
+    if not soup.body: return soup
+
     strings = find_string_elements(soup.body)
+    images = soup.body("img")
+    iframes = soup.body("iframe")
+    #flash = soup.body("param")
     
     for string_el in strings:
         # Run regex on each string
@@ -221,12 +268,20 @@ def process_as_html(contents, charset):
             
             already_link = change_link_href(string_el, "http://www.slowerinternet.com")
             if not already_link:
-                print "Must create a link!"
+                #print "Must create a link!"
                 link = soup.new_tag("a", href="http://www.slowerinternet.com")
                 link.string = censored
                 string_el.replace_with(link)
             else:
                 string_el.replace_with(censored)
+
+    for img in images:
+        if img.get("src") and adblock_filter.match(img["src"]):
+            img["src"] = "https://docs.python.org/favicon.ico"
+
+    for iframe in iframes:
+        if iframe.get("src") and adblock_filter.match(iframe["src"]):
+            iframe["src"] = "http://example.com"
 
     return soup
        
