@@ -1,5 +1,6 @@
 from libmproxy import controller
 import threading
+import sqlite3
 
 def concurrent(fn):
     def _concurrent(ctx, msg):
@@ -17,3 +18,20 @@ def concurrent(fn):
         threading.Thread(target=run).start()
         
     return _concurrent
+
+
+def get_hostname(clientIP, routerIP):
+    print "opening DB"
+    db = sqlite3.connect("../dhcp-sync/data/dhcp-sync.db")
+    with db:
+        db.row_factory = sqlite3.Row
+        cursor = db.cursor()
+        cursor.execute("SELECT * FROM clients WHERE clientIP=? AND routerIP=?", (clientIP, routerIP))
+        result = cursor.fetchone()
+
+
+        if result:
+
+            return result["host"] or None
+        else:
+            return None

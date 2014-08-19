@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 
 from random import choice, random
 
-from config import config
+from config import global_config
 
 TRANSPARENT = False
 
@@ -234,7 +234,7 @@ def process_as_html(contents, charset):
     return soup
 
 
-if config["transparent_mode"]:
+if global_config["transparent_mode"]:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
         mode = "transparent"

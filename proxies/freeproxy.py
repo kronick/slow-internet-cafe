@@ -16,7 +16,7 @@ import json
 from bs4 import BeautifulSoup
 
 from Adblock import Filter
-from config import config
+from config import global_config
 
 
 currency_pattern = re.compile(ur'''
@@ -277,7 +277,7 @@ def process_as_html(contents, charset):
     return soup
        
 
-if config["transparent_mode"]:
+if global_config["transparent_mode"]:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
         mode = "transparent"

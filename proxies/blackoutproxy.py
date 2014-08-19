@@ -13,7 +13,7 @@ import threading
 import socket
 import sqlite3
 
-from utils import concurrent
+from utils import concurrent, get_hostname
 
 from datetime import datetime, timedelta
 from time import time
@@ -21,7 +21,7 @@ from time import time
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
-from config import config
+from config import global_config
 
 class BlackoutMaster(controller.Master):
     def __init__(self, server):
@@ -64,27 +64,34 @@ class BlackoutMaster(controller.Master):
         url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
         
         db = sqlite3.connect("db/blackout.db")
+        db.row_factory = sqlite3.Row
         cursor = db.cursor()
-        cursor.execute('''SELECT url, last_accessed, life_remaining FROM resources WHERE url=?''', (url,))
+        cursor.execute('''SELECT * FROM resources WHERE url=?''', (url,))
         resource = cursor.fetchone()
-        
+
+        client_ip = msg.flow.client_conn.address.address[0]
+
         if resource is None:
             # If not, add the URL to the database with current timestamp
             # and pass the page on as usual
 
-            cursor.execute('''INSERT INTO resources(url, last_accessed, life_remaining) VALUES(?, ?, 0)''',
-                                                    (url, int(time())))
+            hostname = get_hostname(client_ip, global_config["router_IPs"]["blackout"]) or client_ip
+            cursor.execute('''INSERT INTO resources(url, last_accessed, life_remaining, accessed_by) VALUES(?, ?, 0, ?)''',
+                                                    (url, int(time()), hostname))
             db.commit()
 
         else:
             # If yes in the database, was it accessed within the past 24 hours?
             now = int(time())
-            then = resource[1]
+            then = resource["last_accessed"]
+            accessed_by = resource["accessed_by"]
+
             blackout_time = 86400 #86400 # 24 hours in seconds
             if now - then > blackout_time:
                 # If not accessed in 24 hours, update the database with the current timestamp
                 # and pass the page on as usual
-                cursor.execute('''UPDATE resources SET last_accessed = ? WHERE url = ?''', (now, url))
+                hostname = get_hostname(client_ip, global_config["router_IPs"]["blackout"]) or client_ip
+                cursor.execute('''UPDATE resources SET last_accessed = ?, accessed_by = ? WHERE url = ?''', (now, hostname, url))
                 db.commit()
             else:
                 # If it was accessed in past 24 hours, display the blackout page with info
@@ -128,7 +135,7 @@ class BlackoutMaster(controller.Master):
                 
                 template = template_env.get_template("blackout/notavailable.html")
 
-                msg.content = template.render(url=url, access_time = then_string, hours=int(hours), minutes=int(minutes), seconds=int(seconds))
+                msg.content = template.render(url=url, access_time = then_string, hours=int(hours), minutes=int(minutes), seconds=int(seconds), accessed_by=accessed_by)
 
                 #msg.content = u"<html><body style='background: url(http://127.0.0.1:8000/static/img/dusk.jpg); background-size: 100%; background-position: bottom'>{}<div style='width: 900px; height: 300px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto; padding: 30px;'>{}<br>IS NOT AVAILABLE<br>{}</div></div></body></html>".format(script, url, extras)
                 # "Dusk-A330" by mailer_diablo - Self-taken (Unmodified). Licensed under Creative Commons Attribution-Share Alike 3.0 via Wikimedia Commons - http://commons.wikimedia.org/wiki/File:Dusk-A330.JPG#mediaviewer/File:Dusk-A330.JPG.
@@ -143,7 +150,7 @@ class BlackoutMaster(controller.Master):
         db.close()
 
 
-if config["transparent_mode"]:
+if global_config["transparent_mode"]:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
         mode = "transparent"

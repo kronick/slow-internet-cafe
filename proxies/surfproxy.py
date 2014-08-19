@@ -12,7 +12,7 @@ TRANSPARENT_SSL_PORTS = [443, 8433]
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
-from config import config
+from config import global_config
 
 # TODO: Set these based on the surf report from San Diego or somewhere
 weather_params = {
@@ -126,7 +126,7 @@ class SurfMaster(controller.Master):
 
 
 
-if config["transparent_mode"]:
+if global_config["transparent_mode"]:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
         mode = "transparent"
