@@ -10,42 +10,49 @@ remaining_minutes = start_minutes = {{ minutes }}
 remaining_hours = start_hours = {{ hours }}
 $(document).ready(function() {
     $("#overlay").css("display", "none");
-    $("#overlay").delay(3000).fadeIn(2000);
+    $("#overlay").delay(500).fadeIn(2000);
     $("#svgContainer").svg();
     startClock($("#svgContainer").svg('get'))
+    $("#svgContainer").css("display", "none");
+    $("#svgContainer").delay(250).fadeIn(1000);
 });
 
 seconds_angle = remaining_seconds / 60 * 360 + 180;
-minutes_angle = remaining_minutes / 60 * 360 + 180;
-hours_angle   = remaining_hours   / 24 * 360 + 180;
+minutes_angle = (remaining_minutes + (remaining_seconds/60)) / 60 * 360 + 180;
+hours_angle   = (remaining_hours + (remaining_minutes/60))   / 24  * 360 + 180;
 
 
 function startClock(svg) {
     w = $(window).width()
     h = $(window).height()
-    r = h * 0.45;
+    r = h * 0.6;
     hours_x = Math.sin((hours_angle-180) * Math.PI/180) * r * .45;
     hours_y = -Math.cos((hours_angle-180) * Math.PI/180) * r * .45;
 
     console.log(hours_angle)
     console.log(w + " x " + h)
-    clock_group = svg.group({transform: "translate(" + (w/2) + " " + (h/2) + ")"});
-    outer_circle = svg.circle(clock_group, 0,0,r, {fill: 'none', stroke: 'white'});
+    clock_group = svg.group({transform: "translate(" + (w*.75) + " " + (h*.75) + ")"});
+    outer_circle = svg.circle(clock_group, 0,0,r, {fill: 'none', stroke: 'rgba(255,255,255,0.5)', strokeWidth: '1'});
+    zero_line = svg.line(clock_group, 0,0, 0,-r*.95, {fill: 'none', stroke: 'rgba(255,255,255,0.5)', strokeWidth: '1'})
     
     path = svg.createPath();
     arc_angle = hours_angle > 360 ? hours_angle : 1000+(hours_angle-180);
     arc_angle = 0
     console.log(hours_x + ", " + hours_y);
-    remaining_path = svg.path(clock_group, path.move(0,0).line(hours_x,hours_y).arc(r*.45,r*.45, 0, hours_angle > 360, false, 0, -r*0.45).close(), {fill: 'rgba(255,255,0,0.5)'}) 
+    remaining_path = svg.path(clock_group, path.move(0,0).line(hours_x,hours_y).arc(r*.45,r*.45, 0, hours_angle > 360, false, 0, -r*0.45).close(),
+                              {fill: 'rgba(251,200,24,0.5)'}) 
     
-    second_hand = svg.line(clock_group,0,0, 0,r*.9, {stroke: '#FF0080', strokeWidth: '2', transform: "rotate(" + seconds_angle + ")"});
+    second_hand = svg.line(clock_group,0,0, 0,r*.9,
+                          { stroke: '#C12C26', strokeWidth: '2', transform: "rotate(" + seconds_angle + ")" });
     $(second_hand).attr("id","secondHand");
    
-    minute_group = svg.group(clock_group,{transform: "rotate(" + minutes_angle + ")"});
-    minute_hand = svg.line(minute_group,0,0, 0,r*.8, {stroke: '#0080FF', strokeWidth: '2'});
+    minute_hand = svg.line(clock_group,0,0, 0,r*.8,
+                          { stroke: '#4377BC', strokeWidth: '2', transform: "rotate(" + minutes_angle + ")" });
+    $(minute_hand).attr("id","minuteHand");
     
-    hour_group = svg.group(clock_group,{transform: "rotate(" + hours_angle + ")"});
-    hour_hand = svg.line(hour_group,0,0, 0,r*.45, {stroke: '#FFFF00', strokeWidth: '2'});
+    hour_hand = svg.line(clock_group,0,0, 0,r*.45,
+                        { stroke: '#FBCC17', strokeWidth: '2', transform: "rotate(" + hours_angle + ")" });
+    $(hour_hand).attr("id","hourHand");
     
     window.setInterval(moveHands, 1000)
 }
@@ -53,7 +60,11 @@ function startClock(svg) {
 
 function moveHands(){
     seconds_angle -= 6;
-    $("#secondHand").animate({svgTransform: "rotate(" + seconds_angle + ")"}, 100)
+    minutes_angle -= .1;
+    hours_angle -= .1/60;
+    $("#secondHand").animate({svgTransform: "rotate(" + seconds_angle + ")"}, 100, "linear")
+    $("#minuteHand").animate({svgTransform: "rotate(" + minutes_angle + ")"}, 100)
+    $("#hourHand").animate({svgTransform: "rotate(" + hours_angle + ")"}, 100)
 
 }
 </script>
@@ -77,8 +88,8 @@ body {
     margin: auto;
     position: absolute;
     left:0; right:0; top:0; bottom:0;
-    text-align: center;
-    font-size: 28pt;
+    text-align: left;
+    font-size: 24pt;
     font-family: "Ubuntu", sans-serif;
     font-weight: bold;
     color: white;
@@ -86,8 +97,9 @@ body {
     text-shadow: black 0 0 40px;
 }
 #overlay {
-    background: rgba(0,0,0,0.5);
-    width: auto;
+    text-align: center;
+    /*background: rgba(0,0,0,0.5);*/
+    width: 50%;
     padding: 30px;
     word-wrap: break-word;
 }
@@ -100,8 +112,8 @@ body {
     <div id="svgContainer"></div>
     <div id="overlayContainer">
         <div id="overlay">
-			{{ url }}<br>IS NOT AVAILABLE<br>
-			<span style='font-size:50%; line-height: 1.5em'>
+			{{ url }}<br>&mdash; IS NOT AVAILABLE &mdash;<br>
+			<span style='font-size:50%; line-height: 1.5em; font-weight: normal;'>
 				The page was already accessed {{ access_time }}.<br>
 				It will not be available again for <span id='h'>{{ hours }}</span> hours, <span id='m'>{{ minutes }}</span> minutes, <span id='s'>{{ seconds }}</span> seconds.<br>
 				<i>PLEASE SEEK OTHER PATHS</i>
