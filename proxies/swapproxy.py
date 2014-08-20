@@ -218,25 +218,17 @@ def process_as_html(user, url, contents, charset, replacements):
             if should_replace and line_len > 1 and unicode(line).strip() != unicode(replacement_string).strip():
                 #print u"{} -- becomes --> {}".format(unicode(line).strip(), replacement_string.strip())
 
-                # Preserve spaces before and after
-                padded_replacement_string = replacement_string
-                if line[0] == u" ":
-                    padded_replacement_string = u" " + padded_replacement_string
-                if line[-1] == u" ":
-                    padded_replacement_string =  padded_replacement_string + u" "
+                # Preserve spaces/punctuation before and after
+                # TODO: Don't pad with characters that are already there
+                # TODO: Check if capitalized
+                pad_chars = u" (){}[],./<>?!@#$%^&*\"'“‘”’~`-_=+¡¿€–—"
+                pre_pad = u"".join([c for c in line[0:2] if c in pad_chars])
+                post_pad = u"".join([c for c in line[-2:] if c in pad_chars])
+                # capitalized = [c for c in a[0:4] if c not in pad_chars][0].isupper()
 
-                if line[0:2] == u". ":
-                    padded_replacement_string =  u". " + padded_replacement_string
-                if line[0:2] == u", ":
-                    padded_replacement_string =  u", " + padded_replacement_string
-
-                # TODO: Check if this is a good match because it
-                #       a) starts/ends with the same punctuation, if any
-                #       b) starts with same case (upper/lowercase)
-                #       c) starts/ends with 
-
-                #line.replace_with(u"{}  / {}".format(unicode(line), padded_replacement_line))
-                line.replace_with(padded_replacement_string)
+                line.replace_with(pre_pad + replacement_string + post_pad)
+                
+                
                 
                 # Remove from list
                 used_strings.append(replacement_id)
