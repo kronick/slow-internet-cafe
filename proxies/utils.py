@@ -21,7 +21,6 @@ def concurrent(fn):
 
 
 def get_hostname(clientIP, routerIP):
-    print "opening DB"
     db = sqlite3.connect("../dhcp-sync/data/dhcp-sync.db")
     with db:
         db.row_factory = sqlite3.Row
@@ -29,9 +28,22 @@ def get_hostname(clientIP, routerIP):
         cursor.execute("SELECT * FROM clients WHERE clientIP=? AND routerIP=?", (clientIP, routerIP))
         result = cursor.fetchone()
 
-
         if result:
 
             return result["host"] or None
         else:
             return None
+
+
+def get_user_info(clientIP, routerIP):
+    db = sqlite3.connect("../dhcp-sync/data/dhcp-sync.db")
+    with db:
+        db.row_factory = sqlite3.Row
+        cursor = db.cursor()
+        cursor.execute("SELECT * FROM clients WHERE clientIP=? AND routerIP=?", (clientIP, routerIP))
+        result = cursor.fetchone()
+
+        if result:
+            return (result["host"], result["mac"]) or (None, None)
+        else:
+            return (None, None)

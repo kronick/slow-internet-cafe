@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 
 from PIL import Image
 
-from config import config
+from config import global_config
 
 options = {
     "frequency": 1, # Only replace every nth image
@@ -163,7 +163,7 @@ class SimilarMaster(controller.Master):
         images_pending -= 1
 
 
-if config["transparent_mode"]:
+if global_config["transparent_mode"]:
     config = ProxyConfig(
         confdir = "~/.mitmproxy",
         mode = "transparent"
