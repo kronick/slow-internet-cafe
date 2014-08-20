@@ -147,6 +147,9 @@ class BlackoutMaster(controller.Master):
                 # Force uncompressed response
                 msg.headers["content-encoding"] = [""]
                 
+                # Don't cache
+                msg.headers["Pragma"] = ["no-cache"]
+                msg.headers["Cache-Control"] = ["no-cache, no-store"]
         db.close()
 
 
