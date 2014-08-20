@@ -256,13 +256,16 @@ def load_replacements(not_this_mac):
         db.row_factory = sqlite3.Row
         cursor = db.cursor()
         # Select a random host from the most recently updated
-        not_this_mac = "0"
         t1 = time.time()
         cursor.execute('''
             SELECT * FROM users WHERE mac IS NOT ? ORDER BY last_seen DESC LIMIT 3
         ''', (not_this_mac,))
+        users = cursor.fetchall()
+        
+        if not users:
+            return
 
-        swap_user = choice(cursor.fetchall())
+        swap_user = choice(results)
 
         t2 = time.time()
         print "Got user in {}ms".format((t2-t1)*1000)
@@ -271,7 +274,7 @@ def load_replacements(not_this_mac):
 
         t1 = time.time()
         cursor.execute("SELECT * FROM strings WHERE string_user IS ? ORDER BY time_added ASC LIMIT 5000", (swap_user["mac"],))
-        results = cursor.fetchall()
+        results = cursor.fetchall() or []
         t2 = time.time()
         print "Got strings in {}ms".format((t2-t1)*1000)
 
