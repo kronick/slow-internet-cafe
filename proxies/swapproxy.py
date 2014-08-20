@@ -1,3 +1,4 @@
+#coding=utf-8
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
@@ -226,6 +227,11 @@ def process_as_html(user, url, contents, charset, replacements):
                 pre_pad = u"".join([c for c in line[0:2] if c in pad_chars])
                 post_pad = u"".join([c for c in line[-2:] if c in pad_chars])
                 # capitalized = [c for c in a[0:4] if c not in pad_chars][0].isupper()
+
+                replacement_string = u"".join([c for c in replacement_string[0:2] if c not in pad_chars]) + \
+                                     replacement_string[2:-2] + \
+                                     u"".join([c for c in replacement_string[-2:] if c not in pad_chars])
+
 
                 line.replace_with(pre_pad + replacement_string + post_pad)
                 
