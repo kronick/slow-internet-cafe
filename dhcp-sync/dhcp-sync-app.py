@@ -56,17 +56,23 @@ def update():
     return "OK"
 
 def createRecord(cursor, db, router, ip, mac, host):
+    # Make sure there's only one entry per router/IP
+    cursor.execute("DELETE FROM clients WHERE routerIP=? and clientIP=?", (router, ip))
+
     cursor.execute("INSERT INTO clients(routerIP, clientIP, mac, host, time, active, cert_installed)" \
                     "values(?, ?, ?, ?, ?, 1, 0)", (router, ip, mac, host, int(time.time())))
     db.commit()
 
 def updateRecord(cursor, db, router, mac, ip, host):
+    # Make sure there's only one entry per router/IP
+    cursor.execute("DELETE FROM clients WHERE routerIP=? and clientIP=? and mac!=?", (router, ip, mac))
+
     cursor.execute("UPDATE clients SET time = ? WHERE routerIP=? and mac=? and clientIP=?",
                    (int(time.time()), router, mac, ip))
     db.commit()            
     
 def removeRecord(cursor, db, router, mac, ip, host):
-    cursor.execute("DELETE FROM clients WHERE routerIP=? and mac=? and clientIP=?",
+    cursor.execute("DELETE FROM clients WHERE routerIP=? and clientIP=?",
                     (router, mac, ip))
     db.commit()
 

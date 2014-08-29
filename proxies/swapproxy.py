@@ -1,3 +1,4 @@
+#coding=utf-8
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
 from libmproxy.proxy.server import ProxyServer
