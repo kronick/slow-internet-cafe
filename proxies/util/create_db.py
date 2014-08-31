@@ -45,7 +45,7 @@ def createTables(overwrite=False):
         '''.format(ifnotexists))
 
         cursor.execute('''
-            CREATE TABLE {} images(image_id INTEGER PRIMARY KEY, image_user INTEGER, image, url,
+            CREATE TABLE {} images(image_id INTEGER PRIMARY KEY, image_user INTEGER, image BLOB, url, type,
                                    width INTEGER KEY, height INTEGER KEY, time_added INTEGER,
                                    FOREIGN KEY(image_user) REFERENCES users(mac))
         '''.format(ifnotexists))

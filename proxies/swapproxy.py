@@ -6,20 +6,22 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent, get_hostname, get_user_info
-
 import os
 import re
 import time
-
 import json
 import sqlite3
-
+import cStringIO
+import requests
+from random import choice, random
 from bs4 import BeautifulSoup
 
-from random import choice, random
-
+from utils import concurrent, get_hostname, get_user_info
 from config import global_config
+
+from PIL import Image
+
+from threading import Lock
 
 TRANSPARENT = False
 
@@ -31,9 +33,12 @@ options = {
     "replace_chance_long":   0.9,    # Chance of replacing a long string (paragraph+ length)
     "string_limit_short":    50,     # Max length of a "short" string
     "string_limit_medium":   500,    # Max length of a "medium" string
+    "replace_chance_image":  0.2,    # Chance of replacing an image with a match
 }
 
 string_length_classes = range(1,20)
+
+db_mutex = Lock()
 
 class FreeMaster(controller.Master):
     def __init__(self, server):
@@ -64,6 +69,9 @@ class FreeMaster(controller.Master):
         # ------------------------------------------------
         #try:
             # Only worry about HTML for now
+            if msg.code != 200:
+                return
+
             content_type = " ".join(msg.headers["content-type"])
 
             content_headers = [x.strip() for x in content_type.split(";")]
@@ -86,7 +94,7 @@ class FreeMaster(controller.Master):
                 t1 = time.time()
                 replacements = load_replacements(mac)
                 t2 = time.time()
-                print "Loaded replacements in {}ms".format((t2-t1)*1000)
+                #print "Loaded replacements in {}ms".format((t2-t1)*1000)
 
                 msg.content = process_as_html(user, url, contents, charset, replacements)
                 
@@ -98,13 +106,27 @@ class FreeMaster(controller.Master):
                 msg.content = msg.content.encode("utf-8")
                 msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
 
+            if content_type is not None and ("image/jpeg" in content_type or "image/webp" in content_type or "image/png" in content_type):
+                
+                filetype = "jpeg" if "jpeg" in content_type else "webp" if "webp" in content_type else "png"
+
+                client_ip = msg.flow.client_conn.address.address[0]
+                hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
+                user = {"mac": mac, "ip": client_ip, "hostname": hostname}
+
+                msg.content = process_image(user, url, msg.get_decoded_content(), filetype)
+                
+                msg.headers["content-encoding"] = [""]
+
+
+
             # Handle JSON
             if "https://twitter.com" in url and content_type is not None and ("json" in content_type or "javascript" in content_type):
                 try:
                     j = json.loads(msg.get_decoded_content(),  encoding = charset)
                 except ValueError:
                     # Not really JSON
-                    print "this is not json1!!"
+                    #print "this is not json1!!"
                     return
 
                 client_ip = msg.flow.client_conn.address.address[0]
@@ -146,12 +168,12 @@ def process_html_in_json(user, url, j, charset, replacements):
                     soup = process_as_html(user, url, soup, charset, replacements)
                     j[k] = unicode(u" ".join([unicode(t) for t in soup.body.contents]))
 
-                    print "---> Found some HTML in this JSON!"
+                    #print "---> Found some HTML in this JSON!"
 
                 
                     #print j[k]
                 else:
-                    print u"Just a single value: " + j[k]
+                    #print u"Just a single value: " + j[k]
                     
 
             except TypeError as e:
@@ -186,15 +208,7 @@ def process_as_html(user, url, contents, charset, replacements):
         soup = contents
     else:
         soup = BeautifulSoup(contents, "html5lib", from_encoding = charset)
-    # kill all script and style elements
-    #for script in soup(["script", "style"]):
-    #    script.extract()    # rip it out
-
-    #text = soup.get_text()
-
-    #for child in soup.body.children:
-        #print u"-->" + unicode(child)
-    #    find_string_elements(child)
+    
     lines = find_string_elements(soup)
 
     # Need to make a copy of the strings in each tag so we can modify the current page and still use its content later
@@ -240,7 +254,7 @@ def process_as_html(user, url, contents, charset, replacements):
 
     delete_replacements(used_strings, None, None)
 
-    add_content_to_db(user, url, line_strings, None, None)
+    add_strings_to_db(user, url, line_strings, None)
 
     #for length in swap_strings:
     #    print "{1} strings of length {0}".format(length, len(swap_strings[length]))
@@ -265,15 +279,15 @@ def load_replacements(not_this_mac):
         swap_user = choice(users)
 
         t2 = time.time()
-        print "Got user in {}ms".format((t2-t1)*1000)
+        #print "Got user in {}ms".format((t2-t1)*1000)
 
-        print swap_user
+        #print swap_user
 
         t1 = time.time()
         cursor.execute("SELECT * FROM strings WHERE string_user IS ? ORDER BY time_added ASC LIMIT 5000", (swap_user["mac"],))
         results = cursor.fetchall() or []
         t2 = time.time()
-        print "Got strings in {}ms".format((t2-t1)*1000)
+        #print "Got strings in {}ms".format((t2-t1)*1000)
 
         # Sort result into dict by length
         # Need to keep full record around so we can delete by ID when used
@@ -290,7 +304,7 @@ def load_replacements(not_this_mac):
                     swap_strings[length].append(r) 
 
         t2 = time.time()
-        print "Sorted {} strings in {}ms".format(len(results), (t2-t1)*1000)
+        #print "Sorted {} strings in {}ms".format(len(results), (t2-t1)*1000)
 
         return {
             "strings": swap_strings,
@@ -298,19 +312,20 @@ def load_replacements(not_this_mac):
             "links": None
         }
 
-def delete_replacements(used_strings, used_images, used_links):
-    with sqlite3.connect("db/swap.db") as db:
-        db.row_factory = sqlite3.Row
-        cursor = db.cursor()
+def delete_replacements(used_strings = None, used_images = None, used_links = None):
+    with db_mutex:
+        with sqlite3.connect("db/swap.db") as db:
+            db.row_factory = sqlite3.Row
+            cursor = db.cursor()
 
-        for i in used_strings or []:
-            cursor.execute("DELETE FROM strings WHERE string_id = ?", (i,))
-        for i in used_images or []:
-            cursor.execute("DELETE FROM images WHERE image_id = ?", (i,))
-        for i in used_links or []:
-            cursor.execute("DELETE FROM links WHERE link_id = ?", (i,))
+            for i in used_strings or []:
+                cursor.execute("DELETE FROM strings WHERE string_id = ?", (i,))
+            for i in used_images or []:
+                cursor.execute("DELETE FROM images WHERE image_id = ?", (i,))
+            for i in used_links or []:
+                cursor.execute("DELETE FROM links WHERE link_id = ?", (i,))
 
-        db.commit()
+            db.commit()
     
 
 def update_users_database(hostname, client_ip, mac):
@@ -321,12 +336,13 @@ def update_users_database(hostname, client_ip, mac):
         db.row_factory = sqlite3.Row
         cursor = db.cursor()
 
-        # See if this MAC address already exists in the user table
-        cursor.execute("INSERT OR REPLACE INTO users(mac, hostname, last_ip, last_seen) VALUES(?, ?, ?, ?)",
-                        (mac or client_ip, hostname, client_ip, int(time.time())))
-        db.commit()
+        with db_mutex:
+            # See if this MAC address already exists in the user table
+            cursor.execute("INSERT OR REPLACE INTO users(mac, hostname, last_ip, last_seen) VALUES(?, ?, ?, ?)",
+                            (mac or client_ip, hostname, client_ip, int(time.time())))
+            db.commit()
 
-def add_content_to_db(user, source_url, strings, images, links):
+def add_strings_to_db(user, source_url, strings, links):
     with sqlite3.connect("db/swap.db") as db:
         cursor = db.cursor()
 
@@ -335,22 +351,106 @@ def add_content_to_db(user, source_url, strings, images, links):
         mac = user["mac"]
         hostname = user["hostname"]
 
+        with db_mutex:
+            # Update the user database. Do this here to limit transactions per pageview
+            cursor.execute("INSERT OR REPLACE INTO users(mac, hostname, last_ip, last_seen) VALUES(?, ?, ?, ?)",
+                            (mac or client_ip, hostname, client_ip, int(time.time())))
 
-        # Update the user database. Do this here to limit transactions per pageview
-        cursor.execute("INSERT OR REPLACE INTO users(mac, hostname, last_ip, last_seen) VALUES(?, ?, ?, ?)",
-                        (mac or client_ip, hostname, client_ip, int(time.time())))
+            for s in strings:
+                if len(s) < 4:
+                    continue
+                cursor.execute('''
+                    INSERT INTO strings(string_user, string, length, url, time_added)
+                                VALUES(?, ?, ?, ?, ?)
+                ''', (mac or client_ip, s, len(s), source_url, int(time.time())))
 
-        for s in strings:
-            if len(s) < 4:
-                continue
+            db.commit()
+
+def process_image(user, url, data, filetype):
+    # Create PIL Image
+    input_image = cStringIO.StringIO(data)
+    input_image.seek(0)
+    image = Image.open(input_image)
+    width, height = image.size
+    image.close()
+
+    add_image_to_db(user, url, data, width, height, filetype)
+
+    if random() < options["replace_chance_image"]:
+                    # Look for a matching image in the database and replace it
+                    replacement = get_replacement_image(user, width, height, filetype)
+                    if replacement:
+                        print "Replacing {}".format(url)
+                    return replacement or data
+
+    return data
+
+def get_replacement_image(user, width, height, filetype):
+    with sqlite3.connect("db/swap.db") as db:
+        db.row_factory = sqlite3.Row
+        cursor = db.cursor()
+
+        # Select a random host from the most recently updated
+        t1 = time.time()
+        cursor.execute('''
+            SELECT * FROM users WHERE mac IS NOT ? ORDER BY last_seen DESC LIMIT 3
+        ''', (user["mac"],))
+        users = cursor.fetchall()
+        
+        if not users:
+            return
+
+        swap_user = choice(users)
+
+        t2 = time.time()
+        print "Got user in {}ms".format((t2-t1)*1000)
+
+        print swap_user
+
+        t1 = time.time()
+        cursor.execute("SELECT * FROM images WHERE image_user IS ? AND width = ? AND height = ? AND type = ? ORDER BY time_added ASC LIMIT 100",
+                       (swap_user["mac"], width, height, filetype))
+        results = cursor.fetchall() or []
+        t2 = time.time()
+        print "Got {} images in {}ms".format(len(results), (t2-t1)*1000)
+
+        if len(results) > 0:
+            img = choice(results)
+            delete_replacements(used_images = [img["image_id"]])
+            #r = requests.get(img["url"])
+            return str(img["image"])
+            #return r.content
+        else:
+            return None
+
+
+def add_image_to_db(user, source_url, image, width, height, filetype):
+    with sqlite3.connect("db/swap.db") as db:
+        cursor = db.cursor()
+
+        # Expects a user dictionary with mac, ip and hostname
+        client_ip = user["ip"]
+        mac = user["mac"]
+        hostname = user["hostname"]
+
+        with db_mutex:
+            # Check to see if this URL already exists in the DB
+            cursor.execute("SELECT * FROM images WHERE url = ?", (source_url,))
+            r = cursor.fetchall() or []
+            if len(r) > 0:
+                return;
+        
             cursor.execute('''
-                INSERT INTO strings(string_user, string, length, url, time_added)
-                            VALUES(?, ?, ?, ?, ?)
-            ''', (mac or client_ip, s, len(s), source_url, int(time.time())))
+                INSERT INTO images(image_user, image, width, height, type, url, time_added)
+                            VALUES(?, ?, ?, ?, ?, ?, ?)
+            ''', (mac or client_ip, sqlite3.Binary(image), width, height, filetype, source_url, int(time.time())))
 
-        db.commit()
+            # cursor.execute('''
+            #     INSERT INTO images(image_user, width, height, type, url, time_added)
+            #                 VALUES(?, ?, ?, ?, ?, ?)
+            # ''', (mac or client_ip, width, height, filetype, source_url, int(time.time())))
 
-
+            db.commit()
 
 if global_config["transparent_mode"]:
     config = ProxyConfig(
