@@ -9,6 +9,8 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
+import json, requests, datetime
+
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
@@ -24,6 +26,12 @@ weather_params = {
 
 waveQueue = {}
 buildingWave = ""
+
+def loadSurfReport(spot) {
+    r = requests.get('http://api.spitcast.com/api/spot/forecast/122/')
+    j = json.loads(r.content)
+    now = datetime.date.today()
+}
 
 class SurfMaster(controller.Master):
     def __init__(self, server):

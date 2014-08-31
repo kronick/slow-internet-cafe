@@ -1,6 +1,11 @@
 #coding=utf-8
 
 #TODO: WEBP isn't working... OpenCV doesn't like loading the images?
+# Good sites:
+# http://mashable.com/2014/08/27/survivor-season-29-cast/
+# https://upload.wikimedia.org/wikipedia/commons/1/1d/Woman_Montage_%281%29.jpg
+# https://upload.wikimedia.org/wikipedia/commons/d/d9/Men_montage_2.jpg
+
 
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
@@ -156,7 +161,8 @@ class FacesMaster(controller.Master):
         # Process requests from users to Internet servers
 
         # Don't allow cached HTML requests, but go ahead and cache CSS, JS, images, etc
-        if "image/jpeg" in "".join(msg.headers["accept"]) or "image/webp" in "".join(msg.headers["accept"]):
+        accept =  "".join(msg.headers["accept"])
+        if "image/jpeg" in accept or "image/webp" in accept or "image/png" in accept:
             del(msg.headers["if-modified-since"])
             del(msg.headers["if-none-match"])
 
@@ -166,12 +172,14 @@ class FacesMaster(controller.Master):
     def handle_response(self, msg):
         # Only worry about images
         content_type = " ".join(msg.headers["content-type"])
-        if msg.code != 200 or content_type is None or not ("image/jpeg" in content_type or "image/webp" in content_type):
+        if msg.code != 200 or content_type is None or not ("image/jpeg" in content_type or "image/webp" in content_type or "image/png" in content_type):
             return
 
         try:
             if "image/jpeg" in content_type:
                 ext = "JPEG"
+            elif "image/png" in content_type:
+                ext = "PNG"                
             else:
                 ext = "WEBP"
 

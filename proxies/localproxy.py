@@ -1,4 +1,23 @@
 # coding=utf-8
+
+# Suprisingly local:
+# -----------------------------------
+# http://www.qq.com/
+# http://www.sina.com.cn/
+# http://www.ifeng.com/
+# http://weather.com/
+# https://www.tuenti.com/
+# http://blogs.wsj.com/
+# http://www.macba.cat/
+
+# Not local:
+# -----------------------------------
+# http://laboralcentrodearte.org
+# http://www.cccb.org/
+# http://mob-barcelona.com
+# https://www.google.es/
+
+
 import os
 import requests
 import json
@@ -119,8 +138,9 @@ class LocalMaster(controller.Master):
                         msg.headers["Pragma"] = ["no-cache"]
                         msg.headers["Cache-Control"] = ["no-cache, no-store"]
                 except ValueError as e:
-                    template = template_env.get_template('local/error.html')
-                    msg.content = template.render(host=msg.flow.request.host)
+                    #template = template_env.get_template('local/error.html')
+                    template = template_env.get_template('local/notlocal.html')
+                    msg.content = template.render(host=msg.flow.request.host, flag="missing")
 
                     #msg.content = "<html><body style='background: url(http://{}:{}/flags/missing.png); background-size: 100%;'><div style='width: 900px; height: 200px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto;'>I DON'T KNOW WHERE I AM<br><span style='font-size: 50%; line-height: 1.75em;'>Check back later to find out if<br>{}<br>is local.</span></div></div></body></html>".format(options["static-server-host"], options["static-server-port"], msg.flow.request.host.upper())
                     msg.headers["content-encoding"] = [""]
