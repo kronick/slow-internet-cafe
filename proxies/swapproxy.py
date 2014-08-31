@@ -67,7 +67,7 @@ class FreeMaster(controller.Master):
             content_type = " ".join(msg.headers["content-type"])
 
             content_headers = [x.strip() for x in content_type.split(";")]
-            charset = None
+            charset = "utf-8"
             for head in content_headers:
                 if head.startswith("charset="):
                     charset = head[8:].lower()
@@ -121,7 +121,8 @@ class FreeMaster(controller.Master):
 
                 # Force unicode
                 msg.content = msg.content.encode("utf-8")
-                msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
+                #msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
+                msg.headers["content-type"] = ["text/html; charset=utf-8"]
 
             # Never cache response
             msg.headers["Pragma"] = ["no-cache"]
@@ -197,11 +198,11 @@ def process_as_html(user, url, contents, charset, replacements):
     lines = find_string_elements(soup)
 
     # Need to make a copy of the strings in each tag so we can modify the current page and still use its content later
-    line_strings = [unicode(line) for line in lines]
+    line_strings = [unicode(line).strip() for line in lines]
 
     # Replace some strings with strings of equal length from the database
     # Keep track of used lines to be deleted later
-    swap_strings = replacements["strings"]
+    swap_strings = replacements["strings"] if replacements else {}
     used_strings = []
     for line in lines:
         line_len = len(line.strip())
@@ -227,9 +228,12 @@ def process_as_html(user, url, contents, charset, replacements):
                 post_pad = u"".join([c for c in line[-2:] if c in pad_chars])
                 # capitalized = [c for c in a[0:4] if c not in pad_chars][0].isupper()
 
+                replacement_string = u"".join([c for c in replacement_string[0:2] if c not in pad_chars]) + \
+                                     replacement_string[2:-2] + \
+                                     u"".join([c for c in replacement_string[-2:] if c not in pad_chars])
+
+
                 line.replace_with(pre_pad + replacement_string + post_pad)
-                
-                
                 
                 # Remove from list
                 used_strings.append(replacement_id)
@@ -258,7 +262,7 @@ def load_replacements(not_this_mac):
         if not users:
             return
 
-        swap_user = choice(results)
+        swap_user = choice(users)
 
         t2 = time.time()
         print "Got user in {}ms".format((t2-t1)*1000)
@@ -337,6 +341,8 @@ def add_content_to_db(user, source_url, strings, images, links):
                         (mac or client_ip, hostname, client_ip, int(time.time())))
 
         for s in strings:
+            if len(s) < 4:
+                continue
             cursor.execute('''
                 INSERT INTO strings(string_user, string, length, url, time_added)
                             VALUES(?, ?, ?, ?, ?)
