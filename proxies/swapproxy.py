@@ -172,9 +172,7 @@ def process_html_in_json(user, url, j, charset, replacements):
 
                 
                     #print j[k]
-                else:
-                    #print u"Just a single value: " + j[k]
-                    
+                
 
             except TypeError as e:
                 #print "Trying next level..."
