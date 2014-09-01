@@ -23,6 +23,9 @@ template_env = Environment(loader=FileSystemLoader("templates"))
 
 from config import global_config
 
+ALLOWED_HOSTS = ["captive.apple.com"]
+ALLOWED_AGENTS = ["CaptiveNetworkSupport"]
+
 class BlackoutMaster(controller.Master):
     def __init__(self, server):
         controller.Master.__init__(self, server)
@@ -59,6 +62,15 @@ class BlackoutMaster(controller.Master):
 
 
     def process_html(self, msg):
+        if msg.flow.request.host in ALLOWED_HOSTS:
+            return
+
+        user_agent = "".join(msg.flow.request.headers["user-agent"])
+        for agent in ALLOWED_AGENTS:
+            if agent in user_agent:
+                return
+
+
         # Check if the requested URL is already in the database
         req = msg.flow.request
         url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
@@ -124,21 +136,11 @@ class BlackoutMaster(controller.Master):
                 hours, minutes = divmod(minutes, 60)
 
                 then_string = "{} at {}".format(accessed_day, then_date.strftime("%H:%M"))
-                # available_string = "until {} at {}".format(available_day, available_date.strftime("%H:%M"))
-                available_string = "for <span id='h'>{}</span> hours, <span id='m'>{}</span> minutes, <span id='s'>{}</span> seconds".format(int(hours), int(minutes), int(seconds))
-                #script = "<script type='text/javascript' src='http://127.0.0.1:8000/static/jquery-1.11.1.min.js'></script>"
-                #script += "<script type='text/javascript'>$(document).ready(function() { setInterval(function() { h = $('#h').text(); m = $('#m').text(); s = $('#s').text(); if(s > 0) $('#s').text(s - 1); else if(m > 0) { $('#s').text('59'); $('#m').text(m-1); } else { $('#s').text('59'); $('#m').text('59'); $('#h').text(h-1); } }, 1000) });</script>"
-                script = "<script type='text/javascript'>setInterval(function() { h = document.getElementById('h').innerHTML; m = document.getElementById('m').innerHTML; s = document.getElementById('s').innerHTML; if(s > 0) document.getElementById('s').innerHTML = (s - 1); else if(m > 0) { document.getElementById('s').innerHTML = '59'; document.getElementById('m').innerHTML = (m-1); } else { document.getElementById('s').innerHTML = '59'; document.getElementById('m').innerHTML = '59'; document.getElementById('h').innerHTML = (h-1); } }, 1000);</script>"
-
-
-                extras = "<span style='font-size:50%; line-height: 1.5em'>The page was already accessed {}.<br>It will not be available again {}.<br><i>PLEASE SEEK OTHER PATHS</i>".format(then_string, available_string)
                 
                 template = template_env.get_template("blackout/notavailable.html")
 
                 msg.content = template.render(url=url, access_time = then_string, hours=int(hours), minutes=int(minutes), seconds=int(seconds), accessed_by=accessed_by)
 
-                #msg.content = u"<html><body style='background: url(http://127.0.0.1:8000/static/img/dusk.jpg); background-size: 100%; background-position: bottom'>{}<div style='width: 900px; height: 300px; margin: auto; position: absolute; left:0; right:0; top:0; bottom:0; text-align: center; font-size: 36pt; font-family: sans-serif; font-weight: bold; color: white; line-height: 1.5em; text-shadow: black 0 0 40px;'><div style='background: rgba(0,0,0,.5); width: auto; padding: 30px;'>{}<br>IS NOT AVAILABLE<br>{}</div></div></body></html>".format(script, url, extras)
-                # "Dusk-A330" by mailer_diablo - Self-taken (Unmodified). Licensed under Creative Commons Attribution-Share Alike 3.0 via Wikimedia Commons - http://commons.wikimedia.org/wiki/File:Dusk-A330.JPG#mediaviewer/File:Dusk-A330.JPG.
                 
                 # Force unicode
                 msg.content = msg.content.encode("utf-8")
@@ -150,6 +152,9 @@ class BlackoutMaster(controller.Master):
                 # Don't cache
                 msg.headers["Pragma"] = ["no-cache"]
                 msg.headers["Cache-Control"] = ["no-cache, no-store"]
+
+                # Allow any script
+                del(msg.headers["content-security-policy"]) 
         db.close()
 
 
