@@ -6,8 +6,12 @@ body {
     padding: 0;
 }
 #bg {
-    /*background: url(http://static-01.slow:8000/flags/{{ flag }}.png) 0 0 repeat;
-    background-size: 100%;*/
+    background: url(http://static-01.slow:8000/flags/{{ flag }}.png) no-repeat center center fixed;
+    background-size: cover;
+    -webkit-background-size: cover;
+    -moz-background-size: cover;
+    -o-background-size: cover;
+
     z-index: -1;
     width: 100%;
     height: 100%;
@@ -19,6 +23,7 @@ body {
 }
 
 #bg img {
+    display: none;
     width: 100%;
     height: 100%;
 }

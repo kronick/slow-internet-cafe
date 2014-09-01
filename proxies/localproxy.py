@@ -9,6 +9,8 @@
 # https://www.tuenti.com/
 # http://blogs.wsj.com/
 # http://www.macba.cat/
+# http://www.npr.org
+# http://www.usatoday.com/
 
 # Not local:
 # -----------------------------------
@@ -46,6 +48,9 @@ options = {
         "static-server-port": "8000",
         }
 
+ALLOWED_HOSTS = ["captive.apple.com"]
+ALLOWED_AGENTS = ["CaptiveNetworkSupport"]
+
 class LocalMaster(controller.Master):
     def __init__(self, server):
         controller.Master.__init__(self, server)
@@ -74,8 +79,16 @@ class LocalMaster(controller.Master):
         # ------------------------------------------------
         content_type = " ".join(msg.headers["content-type"])
         if content_type is None or "text/html" not in content_type:
-            
             return
+
+        if msg.flow.request.host in ALLOWED_HOSTS:
+            return
+
+        user_agent = "".join(msg.flow.request.headers["user-agent"])
+        for agent in ALLOWED_AGENTS:
+            if agent in user_agent:
+                return
+
         try:
             
             content_type = " ".join(msg.headers["content-type"])
