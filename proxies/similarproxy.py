@@ -55,6 +55,7 @@ class SimilarMaster(controller.Master):
         if "image/jpeg" in "".join(msg.headers["accept"]) or "image/webp" in "".join(msg.headers["accept"]) or "image/png" in "".join(msg.headers["accept"]) or "image/gif" in "".join(msg.headers["accept"]):
             del(msg.headers["if-modified-since"])
             del(msg.headers["if-none-match"])
+            del(msg.headers["Cache-Control"])
 
         msg.reply()
 
@@ -87,9 +88,13 @@ class SimilarMaster(controller.Master):
         else:
             msg.reply()
 
-    @concurrent    
+    @concurrent        
     def process_image(self, msg):
         global images_pending
+        client_ip = msg.flow.client_conn.address.address[0]
+        req = msg.flow.request
+        url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+        print "{} requests {}".format(client_ip, url)   
         # [ ] Better error handling/investigate crashes
         # Make a POST request with multipart/form and following fields:
         # filename: whatever.jpg
