@@ -1,6 +1,6 @@
 # coding=utf-8
 from random import random, randrange, randint, shuffle, choice, uniform
-import os, threading
+import os, threading,sys
 
 from libmproxy import controller, proxy
 from libmproxy.proxy.config import ProxyConfig
@@ -21,6 +21,7 @@ from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
 from config import global_config
+from utils import concurrent
 
 waveQueue = {}
 buildingWave = ""
@@ -92,7 +93,7 @@ def get_report(spot):
     return report;
 
 class SurfMaster(controller.Master):
-    current_spot = "Mavericks"
+    current_spot = choice(surf_spots.keys())
     weather_params = {}
 
     def __init__(self, server):
@@ -105,6 +106,7 @@ class SurfMaster(controller.Master):
         except KeyboardInterrupt:
             self.shutdown()
 
+    @concurrent
     def handle_request(self, msg):
         # Process requests from clients to Internet servers
         # -------------------------------------------------
@@ -113,12 +115,22 @@ class SurfMaster(controller.Master):
             if(len(matches) > 0):
                 s = urllib2.unquote(matches[0]).decode("utf-8")
                 s = s.replace("+", " ")
-                if s in surf_spots.keys():
+                if s in surf_spots.keys() and s != self.current_spot:
                     print u"Moving to {}".format(s)
-                    self.current_spot = s
-                    self.weather_params = get_report(self.current_spot)
+                    try:
+                        self.weather_params = get_report(s)
+                        self.current_spot = s
+                    except TypeError:
+                        print "Could not get surf report..."
+
+                    msg.headers["x-surf-changed"] = ["True"]
                 else:
-                    print u"{} not in spots list...".format(s)
+                    if s == self.current_spot:
+                        if msg.headers["x-surf-changed"]:
+                            del(msg.headers["x-surf-changed"])
+                        print "Already at " + s
+                    else:
+                        print u"{} not in spots list...".format(s)
 
         # Don't allow cached HTML requests, but go ahead and cache CSS, JS, images, etc
         if "text/html" in "".join(msg.headers["accept"]):
@@ -128,6 +140,7 @@ class SurfMaster(controller.Master):
 
         msg.reply()
 
+    @concurrent
     def handle_response(self, msg):
         # Process replies from Internet servers to clients
         if msg.flow.request.host in ALLOWED_HOSTS:
@@ -166,7 +179,7 @@ class SurfMaster(controller.Master):
                                 break
 
 
-                if self.weather_params["FLAT"] or random() < self.weather_params["WAIT"]:
+                if req.headers["x-surf-changed"] or self.weather_params["FLAT"] or random() < self.weather_params["WAIT"]:
                     gifs = [ f for f in listdir(gif_dir) if isfile(join(gif_dir,f))]
                     g = choice(gifs)
 
@@ -176,15 +189,20 @@ class SurfMaster(controller.Master):
                         message = "Not much happening here..."
                     else:
                         if self.weather_params["SIZE"] > 2:
-                            message = "Big waves! "
+                            message = "Big waves "
+                            end = "!"
                         elif self.weather_params["SIZE"] > 1:
-                            message = "A nice swell. "
+                            message = "A nice swell "
+                            end = "."
                         else:
-                            message = "A gentle swell. "
+                            message = "A gentle swell "
+                            end = "."
                         if self.weather_params["SLOP"] >= .1:
-                            message += "All blown out! "
+                            message += "but it's all blown out!"
                         elif self.weather_params["SLOP"] > .5:
-                            message += "A bit of chop. "
+                            message += "with a bit of chop" + end
+                        else:
+                            message += end
 
                     template = template_env.get_template("surf/tranquilo.html")
                     msg.content = (template.render(spots=surf_spots, current_spot = self.current_spot, background=g,
@@ -249,7 +267,7 @@ class SurfMaster(controller.Master):
                                     output += bigWave[l]
 
                             # Give this page a chance to surface again
-                            if new or random() < self.weather_params["SLOP"] * 8:
+                            if new or random() < self.weather_params["REVERBERATE"]:
                                 survivors[u] = waveQueue[u] 
                         else:
                             survivors[u] = waveQueue[u]
@@ -296,7 +314,7 @@ def get_links(url, html, charset):
              not l.endswith(".jpg") and not l.endswith(".png") and not l.endswith(".jpeg") and \
              not l.endswith(".gif") and not l.endswith(".webp") and not l.endswith(".JPG") and \
              not l.endswith(".PNG") and not l.endswith(".GIF") and not l.endswith(".WEBP") and \
-             l not in do_not_follow]
+             l not in do_not_follow and "www.tumblr.com" not in l]
 
     return links
 
@@ -310,10 +328,9 @@ if global_config["transparent_mode"]:
 else:
     config = ProxyConfig(confdir = "~/.mitmproxy")
 
-
-server = ProxyServer(config, 8080)
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+server = ProxyServer(config, port)
 m = SurfMaster(server)
-print "Proxy server loaded."
+print "SURF proxy loaded on port {}".format(port)
 m.run()
-
 

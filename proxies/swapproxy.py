@@ -6,7 +6,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-import os
+import os,sys
 import re
 import time
 import json
@@ -40,7 +40,7 @@ string_length_classes = range(1,20)
 
 db_mutex = Lock()
 
-class FreeMaster(controller.Master):
+class SwapMaster(controller.Master):
     def __init__(self, server):
         controller.Master.__init__(self, server)
 
@@ -458,7 +458,8 @@ if global_config["transparent_mode"]:
 else:
     config = ProxyConfig(confdir = "~/.mitmproxy")
 
-server = ProxyServer(config, 8080)
-m = FreeMaster(server)
-print "Proxy server loaded."
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+server = ProxyServer(config, port)
+m = SwapMaster(server)
+print "SWAP proxy loaded on port {}".format(port)
 m.run()

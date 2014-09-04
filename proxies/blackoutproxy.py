@@ -7,7 +7,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-import os
+import os,sys
 import requests
 import threading
 import socket
@@ -166,8 +166,8 @@ if global_config["transparent_mode"]:
 else:
     config = ProxyConfig(confdir = "~/.mitmproxy")
 
-server = ProxyServer(config, 8080)
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+server = ProxyServer(config, port)
 m = BlackoutMaster(server)
-print "Proxy server loaded."
+print "BLACKOUT proxy loaded on port {}".format(port)
 m.run()
-

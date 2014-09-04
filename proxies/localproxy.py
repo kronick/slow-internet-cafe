@@ -20,7 +20,7 @@
 # https://www.google.es/
 
 
-import os
+import os,sys
 import requests
 import json
 import threading
@@ -176,8 +176,11 @@ else:
     config = ProxyConfig(confdir = "~/.mitmproxy")
 
 
-server = ProxyServer(config, 8080)
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+server = ProxyServer(config, port)
 m = LocalMaster(server)
-print "Proxy server loaded."
+
+
+print "LOCAL proxy loaded on port {}".format(port)
 m.run()
 

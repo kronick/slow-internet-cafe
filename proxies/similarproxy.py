@@ -3,7 +3,7 @@
 # TODO:
 # [ ] Limit number of requests/threads per user
 # [ ] Better error handling/investigate crashes
-import os
+import os, sys
 import threading
 import requests
 import base64
@@ -176,8 +176,9 @@ if global_config["transparent_mode"]:
 else:
     config = ProxyConfig(confdir = "~/.mitmproxy")
 
-server = ProxyServer(config, 8080)
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+server = ProxyServer(config, port)
 m = SimilarMaster(server)
-print "Proxy server loaded."
+print "SIMILAR proxy loaded on port {}".format(port)
 m.run()
 

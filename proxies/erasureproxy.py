@@ -16,7 +16,7 @@ TRANSPARENT_SSL_PORTS = [443, 8433]
 
 from utils import concurrent
 
-import os
+import os,sys
 import math
 import threading
 import cStringIO
@@ -208,8 +208,8 @@ else:
     config = ProxyConfig(confdir = "~/.mitmproxy")
 
 
-server = ProxyServer(config, 8080)
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+server = ProxyServer(config, port)
 m = FacesMaster(server)
-print "Proxy server loaded."
+print "ERASURE proxy loaded on port {}".format(port)
 m.run()
-
