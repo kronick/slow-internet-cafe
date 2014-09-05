@@ -16,7 +16,7 @@ import requests
 from random import choice, random
 from bs4 import BeautifulSoup
 
-from utils import concurrent, get_hostname, get_user_info
+from utils import concurrent, get_hostname, get_user_info, generate_trust
 from config import global_config
 
 from PIL import Image
@@ -67,91 +67,96 @@ class SwapMaster(controller.Master):
     def handle_response(self, msg):
         # Process replies from Internet servers to clients
         # ------------------------------------------------
-        #try:
-            # Only worry about HTML for now
-            if msg.code != 200:
+
+        # First see if we need to show the HTTPS user agreement/certificate download
+        client_ip = msg.flow.client_conn.address.address[0]
+        router_ip = global_config["router_IPs"]["local"]
+        if generate_trust(msg, client_ip, router_ip):
+            return
+        
+
+        # Only worry about HTML for now
+        if msg.code != 200:
+            return
+
+        content_type = " ".join(msg.headers["content-type"])
+
+        content_headers = [x.strip() for x in content_type.split(";")]
+        charset = "utf-8"
+        for head in content_headers:
+            if head.startswith("charset="):
+                charset = head[8:].lower()
+        
+        req = msg.flow.request
+        url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+
+        if content_type is not None and "text/html" in content_type:
+            # Decode contents (if gzip'ed)
+            contents = msg.get_decoded_content()
+
+            client_ip = msg.flow.client_conn.address.address[0]
+            hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
+            user = {"mac": mac, "ip": client_ip, "hostname": hostname}
+            
+            t1 = time.time()
+            replacements = load_replacements(mac)
+            t2 = time.time()
+            #print "Loaded replacements in {}ms".format((t2-t1)*1000)
+
+            msg.content = process_as_html(user, url, contents, charset, replacements)
+            
+            
+            # Force uncompressed response
+            msg.headers["content-encoding"] = [""]
+
+            # Force unicode
+            msg.content = msg.content.encode("utf-8")
+            msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
+
+        if content_type is not None and ("image/jpeg" in content_type or "image/webp" in content_type or "image/png" in content_type):
+            
+            filetype = "jpeg" if "jpeg" in content_type else "webp" if "webp" in content_type else "png"
+
+            client_ip = msg.flow.client_conn.address.address[0]
+            hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
+            user = {"mac": mac, "ip": client_ip, "hostname": hostname}
+
+            msg.content = process_image(user, url, msg.get_decoded_content(), filetype)
+            
+            msg.headers["content-encoding"] = [""]
+
+
+
+        # Handle JSON
+        if "https://twitter.com" in url and content_type is not None and ("json" in content_type or "javascript" in content_type):
+            try:
+                j = json.loads(msg.get_decoded_content(),  encoding = charset)
+            except ValueError:
+                # Not really JSON
+                #print "this is not json1!!"
                 return
 
-            content_type = " ".join(msg.headers["content-type"])
-
-            content_headers = [x.strip() for x in content_type.split(";")]
-            charset = "utf-8"
-            for head in content_headers:
-                if head.startswith("charset="):
-                    charset = head[8:].lower()
+            client_ip = msg.flow.client_conn.address.address[0]
+            hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
+            user = {"mac": mac, "ip": client_ip, "hostname": hostname}
             
-            req = msg.flow.request
-            url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+            replacements = load_replacements(mac)
+            process_html_in_json(user, url, j, charset, replacements)
 
-            if content_type is not None and "text/html" in content_type:
-                # Decode contents (if gzip'ed)
-                contents = msg.get_decoded_content()
+            msg.content = json.dumps(j, sort_keys=True, indent=4, separators=(',', ': '), encoding="utf-8")
 
-                client_ip = msg.flow.client_conn.address.address[0]
-                hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
-                user = {"mac": mac, "ip": client_ip, "hostname": hostname}
-                
-                t1 = time.time()
-                replacements = load_replacements(mac)
-                t2 = time.time()
-                #print "Loaded replacements in {}ms".format((t2-t1)*1000)
+            # Force uncompressed response
+            msg.headers["content-encoding"] = [""]
 
-                msg.content = process_as_html(user, url, contents, charset, replacements)
-                
-                
-                # Force uncompressed response
-                msg.headers["content-encoding"] = [""]
+            # Force unicode
+            msg.content = msg.content.encode("utf-8")
+            #msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
+            msg.headers["content-type"] = ["text/html; charset=utf-8"]
 
-                # Force unicode
-                msg.content = msg.content.encode("utf-8")
-                msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
+        # Never cache response
+        msg.headers["Pragma"] = ["no-cache"]
+        msg.headers["Cache-Control"] = ["no-cache, no-store"]
 
-            if content_type is not None and ("image/jpeg" in content_type or "image/webp" in content_type or "image/png" in content_type):
-                
-                filetype = "jpeg" if "jpeg" in content_type else "webp" if "webp" in content_type else "png"
-
-                client_ip = msg.flow.client_conn.address.address[0]
-                hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
-                user = {"mac": mac, "ip": client_ip, "hostname": hostname}
-
-                msg.content = process_image(user, url, msg.get_decoded_content(), filetype)
-                
-                msg.headers["content-encoding"] = [""]
-
-
-
-            # Handle JSON
-            if "https://twitter.com" in url and content_type is not None and ("json" in content_type or "javascript" in content_type):
-                try:
-                    j = json.loads(msg.get_decoded_content(),  encoding = charset)
-                except ValueError:
-                    # Not really JSON
-                    #print "this is not json1!!"
-                    return
-
-                client_ip = msg.flow.client_conn.address.address[0]
-                hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
-                user = {"mac": mac, "ip": client_ip, "hostname": hostname}
-                
-                replacements = load_replacements(mac)
-                process_html_in_json(user, url, j, charset, replacements)
-
-                msg.content = json.dumps(j, sort_keys=True, indent=4, separators=(',', ': '), encoding="utf-8")
-
-                # Force uncompressed response
-                msg.headers["content-encoding"] = [""]
-
-                # Force unicode
-                msg.content = msg.content.encode("utf-8")
-                #msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
-                msg.headers["content-type"] = ["text/html; charset=utf-8"]
-
-            # Never cache response
-            msg.headers["Pragma"] = ["no-cache"]
-            msg.headers["Cache-Control"] = ["no-cache, no-store"]
-
-        #except Exception as e:
-        #    print repr(e)
 
 def process_html_in_json(user, url, j, charset, replacements):
     try:
@@ -275,6 +280,8 @@ def load_replacements(not_this_mac):
             return
 
         swap_user = choice(users)
+
+        print "Replacing with content from {}".format(swap_user["hostname"])
 
         t2 = time.time()
         #print "Got user in {}ms".format((t2-t1)*1000)

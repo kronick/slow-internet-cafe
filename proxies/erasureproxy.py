@@ -14,7 +14,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent
+from utils import concurrent, generate_trust
 
 import os,sys
 import math
@@ -170,6 +170,12 @@ class FacesMaster(controller.Master):
 
     @concurrent    
     def handle_response(self, msg):
+        # First see if we need to show the HTTPS user agreement/certificate download
+        client_ip = msg.flow.client_conn.address.address[0]
+        router_ip = global_config["router_IPs"]["local"]
+        if generate_trust(msg, client_ip, router_ip):
+            return
+
         # Only worry about images
         content_type = " ".join(msg.headers["content-type"])
         if msg.code != 200 or content_type is None or not ("image/jpeg" in content_type or "image/webp" in content_type or "image/png" in content_type):

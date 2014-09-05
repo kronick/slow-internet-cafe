@@ -20,7 +20,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent
+from utils import concurrent, generate_trust
 
 from bs4 import BeautifulSoup
 
@@ -60,10 +60,12 @@ class SimilarMaster(controller.Master):
         msg.reply()
 
     def handle_response(self, msg):
-        # Process replies from Internet servers to users
-        #print msg.flow.request.headers
-        #if msg.flow.request.headers["X-Do-Not-Replace"]:
-        #   print "Ignoring this image to avoid infinite loop..."
+        # First see if we need to show the HTTPS user agreement/certificate download
+        client_ip = msg.flow.client_conn.address.address[0]
+        router_ip = global_config["router_IPs"]["local"]
+        if generate_trust(msg, client_ip, router_ip):
+            return
+
         is_image = (msg.headers["content-type"] == ["image/jpeg"] or msg.headers["content-type"] == ["image/png"] or msg.headers["content-type"] == ["image/webp"] or msg.headers["content-type"] == ["image/gif"]) and msg.code == 200 and not msg.flow.request.headers["X-Do-Not-Replace"] and len(msg.content) > options["smallest_image"]
 
         global images_processed

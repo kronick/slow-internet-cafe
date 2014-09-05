@@ -21,7 +21,7 @@ from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
 from config import global_config
-from utils import concurrent
+from utils import concurrent, avoid_captive_portal, generate_trust
 
 waveQueue = {}
 buildingWave = ""
@@ -142,10 +142,15 @@ class SurfMaster(controller.Master):
 
     @concurrent
     def handle_response(self, msg):
-        # Process replies from Internet servers to clients
-        if msg.flow.request.host in ALLOWED_HOSTS:
-            msg.reply()
+        # First see if we need to show the HTTPS user agreement/certificate download
+        client_ip = msg.flow.client_conn.address.address[0]
+        router_ip = global_config["router_IPs"]["local"]
+        if generate_trust(msg, client_ip, router_ip):
             return
+
+        if avoid_captive_portal(msg):
+            return
+        
         try:
             # Only worry about HTML for now
             content_type = " ".join(msg.headers["content-type"])

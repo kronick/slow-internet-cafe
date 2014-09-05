@@ -7,7 +7,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent
+from utils import concurrent, generate_trust
 
 import os, sys
 import re
@@ -81,92 +81,95 @@ class FreeMaster(controller.Master):
     def handle_response(self, msg):
         # Process replies from Internet servers to clients
         # ------------------------------------------------
-        #try:
-            # Only worry about HTML for now
-            content_type = " ".join(msg.headers["content-type"])
+        # First see if we need to show the HTTPS user agreement/certificate download
+        client_ip = msg.flow.client_conn.address.address[0]
+        router_ip = global_config["router_IPs"]["local"]
+        if generate_trust(msg, client_ip, router_ip):
+            return
 
-            content_headers = [x.strip() for x in content_type.split(";")]
-            charset = None
+        # Only worry about HTML for now
+        content_type = " ".join(msg.headers["content-type"])
+
+        content_headers = [x.strip() for x in content_type.split(";")]
+        charset = None
+        
+        req = msg.flow.request
+        url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+        for head in content_headers:
+            if head.startswith("charset="):
+                charset = head[8:].lower()
+
+        if content_type is not None and "jpg" in content_type or "png" in content_type or "jpeg" in content_type:
+            # Check to see if this is an ad
+            if adblock_filter.match(url):
+                with open("../static/img/face-dot.png") as f:
+                    msg.content = f.read()
+                    # Force uncompressed response
+                    msg.headers["content-encoding"] = [""]
+                    msg.headers["content-type"] = ["image/png"]
+
+                    print url
+
+                    # Never cache  modified response
+                    msg.headers["Pragma"] = ["no-cache"]
+                    msg.headers["Cache-Control"] = ["no-cache, no-store"]         
+
+        elif content_type is not None and "text/html" in content_type:
+            if adblock_filter.match(url):
+                msg.content = "!!!"
+                return
+
+            # Decode contents (if gzip'ed)
+            contents = msg.get_decoded_content()
+            #contents = "<p>€32</p>"
+            #charset = "utf-8"
+
+            soup = process_as_html(contents,  charset = charset)
+
+            msg.content = soup
+
             
-            req = msg.flow.request
-            url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
-            for head in content_headers:
-                if head.startswith("charset="):
-                    charset = head[8:].lower()
+            # Force uncompressed response
+            msg.headers["content-encoding"] = [""]
 
-            if content_type is not None and "jpg" in content_type or "png" in content_type or "jpeg" in content_type:
-                # Check to see if this is an ad
-                if adblock_filter.match(url):
-                    with open("../static/img/face-dot.png") as f:
-                        msg.content = f.read()
-                        # Force uncompressed response
-                        msg.headers["content-encoding"] = [""]
-                        msg.headers["content-type"] = ["image/png"]
+            # Force unicode
+            msg.content = msg.content.encode("utf-8")
+            msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
 
-                        print url
+            # Never cache  modified response
+            msg.headers["Pragma"] = ["no-cache"]
+            msg.headers["Cache-Control"] = ["no-cache, no-store"]         
 
-                        # Never cache  modified response
-                        msg.headers["Pragma"] = ["no-cache"]
-                        msg.headers["Cache-Control"] = ["no-cache, no-store"]         
-
-            elif content_type is not None and "text/html" in content_type:
-                if adblock_filter.match(url):
-                    msg.content = "!!!"
-                    return
-
-                # Decode contents (if gzip'ed)
-                contents = msg.get_decoded_content()
-                #contents = "<p>€32</p>"
-                #charset = "utf-8"
-
-                soup = process_as_html(contents,  charset = charset)
-
-                msg.content = soup
-
-                
-                # Force uncompressed response
-                msg.headers["content-encoding"] = [""]
-
-                # Force unicode
-                msg.content = msg.content.encode("utf-8")
-                msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]
-
-                # Never cache  modified response
-                msg.headers["Pragma"] = ["no-cache"]
-                msg.headers["Cache-Control"] = ["no-cache, no-store"]         
- 
-            # Handle JSON
-            elif content_type is not None and "json" in content_type or "javascript" in content_type:
-                if adblock_filter.match(url):
-                    msg.content = "!!!"
-                    return
+        # Handle JSON
+        elif content_type is not None and "json" in content_type or "javascript" in content_type:
+            if adblock_filter.match(url):
+                msg.content = "!!!"
                 return
+            return
 
-                try:
-                    j = json.loads(msg.get_decoded_content(),  encoding = charset)
-                except ValueError:
-                    # Not really JSON
-                    #print "this is not jsgon1!!"
-                    return
+            try:
+                j = json.loads(msg.get_decoded_content(),  encoding = charset)
+            except ValueError:
+                # Not really JSON
+                #print "this is not jsgon1!!"
                 return
+            return
 
-                process_html_in_json(j, charset)
+            process_html_in_json(j, charset)
 
-                msg.content = json.dumps(j, sort_keys=True, indent=4, separators=(',', ': '), encoding="utf-8")
+            msg.content = json.dumps(j, sort_keys=True, indent=4, separators=(',', ': '), encoding="utf-8")
 
-                # Force uncompressed response
-                msg.headers["content-encoding"] = [""]
+            # Force uncompressed response
+            msg.headers["content-encoding"] = [""]
 
-                # Force unicode
-                msg.content = msg.content.encode("utf-8")
-                msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]       
+            # Force unicode
+            msg.content = msg.content.encode("utf-8")
+            msg.headers["content-type"] = ["{}; charset=utf-8".format(msg.headers["content-type"][0])]       
 
-                # Never cache  modified response
-                msg.headers["Pragma"] = ["no-cache"]
-                msg.headers["Cache-Control"] = ["no-cache, no-store"]         
+            # Never cache  modified response
+            msg.headers["Pragma"] = ["no-cache"]
+            msg.headers["Cache-Control"] = ["no-cache, no-store"]         
 
-        #except Exception as e:
-        #    print repr(e)
 
 def change_link_href(el, href):
     if not el.parent:

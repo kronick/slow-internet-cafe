@@ -33,7 +33,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent
+from utils import concurrent, avoid_captive_portal, generate_trust
 
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
@@ -47,9 +47,6 @@ options = {
         "static-server-host": "static-01.slow",
         "static-server-port": "8000",
         }
-
-ALLOWED_HOSTS = ["captive.apple.com"]
-ALLOWED_AGENTS = ["CaptiveNetworkSupport"]
 
 class LocalMaster(controller.Master):
     def __init__(self, server):
@@ -77,17 +74,18 @@ class LocalMaster(controller.Master):
     def handle_response(self, msg):
         # Process replies from Internet servers to clients
         # ------------------------------------------------
+        # First see if we need to show the HTTPS user agreement/certificate download
+        client_ip = msg.flow.client_conn.address.address[0]
+        router_ip = global_config["router_IPs"]["local"]
+        if generate_trust(msg, client_ip, router_ip):
+            return
+
         content_type = " ".join(msg.headers["content-type"])
         if content_type is None or "text/html" not in content_type:
             return
 
-        if msg.flow.request.host in ALLOWED_HOSTS:
+        if avoid_captive_portal(msg):
             return
-
-        user_agent = "".join(msg.flow.request.headers["user-agent"])
-        for agent in ALLOWED_AGENTS:
-            if agent in user_agent:
-                return
 
         try:
             

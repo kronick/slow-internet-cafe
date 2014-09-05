@@ -51,14 +51,25 @@ def get_user_info(clientIP, routerIP):
 
 def generate_trust(msg, clientIP, routerIP):
     # Check if this page is a redirect to a HTTPS site or being served over HTTPS itself
-    if ((msg.code in [301, 302, 303, 307]) and msg.headers["location"][0].startswith("https")): #or \
-        #msg.flow.request.get_scheme() == "https" or msg.code == 204:
-        # Check if this user has already acknowledged the trust certificate
+    if "trust_the_cafe=1" in msg.flow.request.path:
+        host, mac = get_user_info(clientIP, routerIP)
         db = sqlite3.connect("../dhcp-sync/data/dhcp-sync.db")
         with db:
             db.row_factory = sqlite3.Row
             cursor = db.cursor()
-            cursor.execute("SELECT * FROM clients WHERE clientIP=? and routerIP=?", (clientIP, routerIP))
+            cursor.execute("UPDATE clients SET cert_installed=1 WHERE mac=?", (mac,))
+            db.commit()
+            print "TRUSTING {}".format(mac)
+
+    if ((msg.code in [301, 302, 303, 307]) and msg.headers["location"][0].startswith("https")) or msg.code == 204:
+        # Check if this user has already acknowledged the trust certificate
+        host, mac = get_user_info(clientIP, routerIP)
+
+        db = sqlite3.connect("../dhcp-sync/data/dhcp-sync.db")
+        with db:
+            db.row_factory = sqlite3.Row
+            cursor = db.cursor()
+            cursor.execute("SELECT * FROM clients WHERE mac=?", (mac,))
             result = cursor.fetchone()
 
             if result and result["cert_installed"] > 0:
@@ -72,9 +83,24 @@ def generate_trust(msg, clientIP, routerIP):
             url = msg.headers["location"][0]
         else:
             url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+
         msg.headers["location"] = ["{}://trust-us.slow/?r={}".format(msg.flow.request.get_scheme(), url)]
         
         return True
     
     # If this is a plain HTTP page, don't worry about it
+    return False
+
+
+CP_ALLOWED_HOSTS = ["captive.apple.com"]
+CP_ALLOWED_AGENTS = ["CaptiveNetworkSupport"]
+def avoid_captive_portal(msg):
+    user_agent = "".join(msg.flow.request.headers["user-agent"])
+    if msg.flow.request.host in CP_ALLOWED_HOSTS:
+        return True
+
+    for agent in CP_ALLOWED_AGENTS:
+        if agent in user_agent:
+            return True
+
     return False

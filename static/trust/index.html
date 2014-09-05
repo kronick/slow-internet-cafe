@@ -1,0 +1,67 @@
+<html>
+<head>
+<script src="//static-01.slow/scripts/jquery-1.11.1.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+function getQueryVariable(variable)
+{
+  var query = window.location.search.substring(1);
+  var vars = query.split("&");
+  for (var i=0;i<vars.length;i++) {
+    var pair = vars[i].split("=");
+    if(pair[0] == variable){return pair[1];}
+  }
+  return(false);
+}
+$(document).ready(function() {
+    $("#after-downloading").hide()
+    updateLink(false );
+})
+
+function showContinue() {
+    $("#after-downloading").slideDown()    
+}
+
+function updateTrust(checked) {
+    console.log(checked)
+    updateLink(true)
+}
+
+function updateLink(trust) {
+    href = getQueryVariable("r")
+    if(trust) {
+        if (href.indexOf("?") > 0) {
+            // Query string already exists
+            href += "&trust_the_cafe=1"
+        }
+        else {
+            href += "?trust_the_cafe=1"
+        }
+    }
+    $("#continue").attr("href", href)
+}
+
+</script>
+</head>
+<body>
+
+<h1>Trust us</h1>
+<p>
+<a href="http://cafe.slow/about">The Slow Internet Cafe</a>
+</p>
+<p>
+Download <a href="slow-internet-cafe-ca-cert.pem" onClick="showContinue()">this certificate</a> please.
+</p>
+<div id="after-downloading">
+    <div id="installation-instructions">
+    Here's how you install this on your platform:
+    <br>
+    blah blah balh
+    </div>
+    <p>
+    <a id="continue" href="#">Take me to my destination</a>.
+    <br><input type="checkbox" name="trust" id="trust-check" onchange="updateTrust(this.checked)">Don't show me this again. I've installed the certificate and trust the Slow Internet Cafe!
+    </p>
+</div>
+</body>
+</html>
+

@@ -13,7 +13,7 @@ import threading
 import socket
 import sqlite3
 
-from utils import concurrent, get_hostname
+from utils import concurrent, get_hostname, avoid_captive_portal, generate_trust
 
 from datetime import datetime, timedelta
 from time import time
@@ -52,6 +52,12 @@ class BlackoutMaster(controller.Master):
     def handle_response(self, msg):
         # Process replies from Internet servers to clients
         # ------------------------------------------------
+        # First see if we need to show the HTTPS user agreement/certificate download
+        client_ip = msg.flow.client_conn.address.address[0]
+        router_ip = global_config["router_IPs"]["local"]
+        if generate_trust(msg, client_ip, router_ip):
+            return
+
         content_type = " ".join(msg.headers["content-type"])
         if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type:
 
@@ -62,13 +68,8 @@ class BlackoutMaster(controller.Master):
 
 
     def process_html(self, msg):
-        if msg.flow.request.host in ALLOWED_HOSTS:
+        if avoid_captive_portal(msg):
             return
-
-        user_agent = "".join(msg.flow.request.headers["user-agent"])
-        for agent in ALLOWED_AGENTS:
-            if agent in user_agent:
-                return
 
 
         # Check if the requested URL is already in the database
