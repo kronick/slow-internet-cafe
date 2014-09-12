@@ -57,7 +57,8 @@ class SwapMaster(controller.Master):
         # -------------------------------------------------
 
         # Don't allow cached HTML requests, but go ahead and cache CSS, JS, images, etc
-        if "text/html" in "".join(msg.headers["accept"]) or "json" in "".join(msg.headers["accept"]) or "javascript" in "".join(msg.headers["accept"]):
+        content_type = "".join(msg.headers["accept"])
+        if "text/html" in content_type or "json" in content_type or "javascript" in content_type or "image/jpeg" in content_type or "image/webp" in content_type or "image/png" in content_type:
             del(msg.headers["if-modified-since"])
             del(msg.headers["if-none-match"])
             #print "NO-CACHE"
@@ -122,7 +123,10 @@ class SwapMaster(controller.Master):
             hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
             user = {"mac": mac, "ip": client_ip, "hostname": hostname}
 
-            msg.content = process_image(user, url, msg.get_decoded_content(), filetype)
+            contents = msg.get_decoded_content()
+            if len(contents) < 10:
+                return
+            msg.content = process_image(user, url, contents, filetype)
             
             msg.headers["content-encoding"] = [""]
 
@@ -404,26 +408,31 @@ def get_replacement_image(user, width, height, filetype):
         db.row_factory = sqlite3.Row
         cursor = db.cursor()
 
-        # Select a random host from the most recently updated
-        t1 = time.time()
-        cursor.execute('''
-            SELECT * FROM users WHERE mac IS NOT ? ORDER BY last_seen DESC LIMIT 3
-        ''', (user["mac"],))
-        users = cursor.fetchall()
+        # # Select a random host from the most recently updated
+        # t1 = time.time()
+        # cursor.execute('''
+        #     SELECT * FROM users WHERE mac IS NOT ? ORDER BY last_seen DESC LIMIT 3
+        # ''', (user["mac"],))
+        # users = cursor.fetchall()
         
-        if not users:
-            return
+        # if not users:
+        #     return
 
-        swap_user = choice(users)
+        # swap_user = choice(users)
 
-        t2 = time.time()
+        # t2 = time.time()
         #print "Got user in {}ms".format((t2-t1)*1000)
 
         #print swap_user
 
         t1 = time.time()
-        cursor.execute("SELECT * FROM images WHERE image_user IS ? AND width = ? AND height = ? AND type = ? ORDER BY time_added ASC LIMIT 100",
-                       (swap_user["mac"], width, height, filetype))
+        width_low = width * 0.8
+        width_high = width * 1.2
+        height_low = height * 0.8
+        height_high = height * 1.2
+
+        cursor.execute("SELECT * FROM images WHERE image_user IS NOT ? AND width > ? AND width < ? AND height > ? AND height < ? AND type = ? ORDER BY time_added ASC LIMIT 100",
+                       (user["mac"], width_low, width_high, height_low, height_high, filetype))
         results = cursor.fetchall() or []
         t2 = time.time()
         log.debug("Got {} images in {}ms".format(len(results), (t2-t1)*1000))

@@ -1,9 +1,18 @@
 from flask import Flask, request
 import sqlite3
 import time
+import logging, logging.handlers
 
 app = Flask(__name__)
 app.logger.setLevel(0)
+
+logger = logging.getLogger("dhcp_sync")
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s [%(name)s - %(levelname)s] %(message)s")
+filehandler = logging.handlers.RotatingFileHandler("/var/log/slow-internet-cafe/DHCP_SYNC", maxBytes=10000000, backupCount=10, encoding="utf-8")
+filehandler.setLevel(logging.INFO)
+filehandler.setFormatter(formatter)
+logger.addHandler(filehandler)
 
 @app.route("/update", methods=["POST"])
 def update():
@@ -29,10 +38,10 @@ def update():
                 # If this record already exists, it should be interpreted as an OLD entry
                 lasttime = resource["time"]
                 updateRecord(cursor,db,router,mac,ip,host)
-                print "{} is back (but new to the DHCP server)! (last seen {}) {}".format(host or mac, lasttime, mac)
+                logger.info("{} is back on {} (but new to the DHCP server)! (last seen {}) {}".format(host or mac, router, lasttime, mac))
             else:
                 createRecord(cursor, db, router, ip, mac, host)
-                print "Welcome to {} on {}".format(host or mac, ip)
+                logger.info("Welcome to {} on {} on router {}".format(host or mac, ip, router))
 
         elif action == "old":
             # Update record with current time
@@ -46,11 +55,11 @@ def update():
                 lasttime = resource["time"]
                 updateRecord(cursor,db,router,mac,ip,host)
 
-            print "{} is back! (last seen {}) {}".format(host or mac, lasttime, mac)
+            logger.info("{} is back on {}! (last seen {}) {}".format(host or mac, router, lasttime, mac))
         
         elif action == "del":
             removeRecord(cursor,db,router,mac,ip,host)
-            print "{} is no longer with us.".format(host or mac)
+            logger.info("{} is no longer with us on router {}.".format(host or mac, router))
             # Select entries in database with this IP 
 
     return "OK"
