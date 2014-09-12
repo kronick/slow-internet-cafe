@@ -21,7 +21,7 @@ from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
 
 from config import global_config
-from utils import concurrent, avoid_captive_portal, generate_trust
+from utils import concurrent, avoid_captive_portal, generate_trust, get_logger
 
 waveQueue = {}
 buildingWave = ""
@@ -33,6 +33,8 @@ do_not_follow = ["http://www.tumblr.com/register", ]
 
 ALLOWED_HOSTS = ["captive.apple.com"]
 ALLOWED_AGENTS = ["CaptiveNetworkSupport"]
+
+log = get_logger("SURF")
 
 surf_spots = {
                 u"Barceloneta":      {"id": 3535, "location": u"Barcelona, España"},
@@ -57,7 +59,7 @@ def get_report(spot):
     api_base = "http://magicseaweed.com/api/" + global_config["msw_api_key"] + "/forecast/?units=eu&spot_id="
     r = requests.get(api_base + str(surf_spots[spot]["id"]))
     j = json.loads(r.content)
-    print spot
+    log.info(u"Loading surf report for {}".format(spot))
     # Find current time
     now = int(time.time())
     diff = sys.maxsize
@@ -74,9 +76,9 @@ def get_report(spot):
     for n in range(nowcast["fadedRating"]):
         rating += "-"
     rating += "]"
-    print rating
-    print "wind: " + str(nowcast["wind"]["speed"]) + nowcast["wind"]["unit"]
-    print "waves: {}-{} {}".format(nowcast["swell"]["minBreakingHeight"], nowcast["swell"]["maxBreakingHeight"], nowcast["swell"]["unit"])
+    log.debug(rating)
+    log.debug("wind: " + str(nowcast["wind"]["speed"]) + nowcast["wind"]["unit"])
+    log.debug("waves: {}-{} {}".format(nowcast["swell"]["minBreakingHeight"], nowcast["swell"]["maxBreakingHeight"], nowcast["swell"]["unit"]))
 
     report = {
         "REVERBERATE" : 0.5,
@@ -88,17 +90,29 @@ def get_report(spot):
         "waves": "{}-{} {}".format(nowcast["swell"]["minBreakingHeight"], nowcast["swell"]["maxBreakingHeight"], nowcast["swell"]["unit"])
     }
 
-    print report
+    log.info(report)
 
     return report;
 
 class SurfMaster(controller.Master):
     current_spot = choice(surf_spots.keys())
-    weather_params = {}
+    weather_params = {"REVERBERATE" : 0.5, "WAIT": 0.3, "SLOP": 0.05, "SIZE": 1, "wind": "? kph", "waves": "?-? m"}
 
     def __init__(self, server):
         controller.Master.__init__(self, server)
-        self.weather_params = get_report(self.current_spot)
+        found_a_spot = False
+        i = 0
+        while not found_a_spot:
+            if i > len(surf_spots):
+                log.error("No surf reports available on launch!")
+                break
+            i += 1
+
+            try:
+                self.weather_params = get_report(self.current_spot)
+                found_a_spot = True
+            except Exception:
+                self.current_spot = choice(surf_spots.keys())
 
     def run(self):
         try:
@@ -116,21 +130,21 @@ class SurfMaster(controller.Master):
                 s = urllib2.unquote(matches[0]).decode("utf-8")
                 s = s.replace("+", " ")
                 if s in surf_spots.keys() and s != self.current_spot:
-                    print u"Moving to {}".format(s)
+                    log.debug(u"Moving to {}".format(s))
                     try:
                         self.weather_params = get_report(s)
                         self.current_spot = s
                     except TypeError:
-                        print "Could not get surf report..."
+                        log.warning("Could not get surf report...")
 
                     msg.headers["x-surf-changed"] = ["True"]
                 else:
                     if s == self.current_spot:
                         if msg.headers["x-surf-changed"]:
                             del(msg.headers["x-surf-changed"])
-                        print "Already at " + s
+                        log.debug(u"Already at ".format(s))
                     else:
-                        print u"{} not in spots list...".format(s)
+                        log.warning(u"{} not in spots list...".format(s))
 
         # Don't allow cached HTML requests, but go ahead and cache CSS, JS, images, etc
         if "text/html" in "".join(msg.headers["accept"]):
@@ -163,7 +177,7 @@ class SurfMaster(controller.Master):
             if content_type is not None and "text/html" in content_type:
                 req = msg.flow.request
                 client_ip = msg.flow.client_conn.address.host
-                url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+                url = u"{}://{}{}".format(req.get_scheme(), u"".join(req.headers["host"]), req.path)
 
                 #print msg.headers["content-encoding"]
                 #print dir(msg)
@@ -176,7 +190,7 @@ class SurfMaster(controller.Master):
                         l = choice(links)
                         for i in range(5):
                             try:
-                                print "Crawling " + l
+                                log.debug(u"Crawling {}".format(l))
                                 r = requests.get(l)
                                 waveQueue[l] = r.content.replace("</html>", "")
                                 l = choice(get_links(l, r.content, None))
@@ -235,13 +249,13 @@ class SurfMaster(controller.Master):
                         for i in range(0, int((self.weather_params["SIZE"] - 1) * 3)):
                             if random() < 0.8:
                                 l = choice(links)
-                                print "Adding " + l
+                                log.debug(u"Adding {}".format(l))
                                 try:
                                     r = requests.get(l)
                                     waveQueue[l] = r.content.replace("</html>", "")
                                     bigWave[l] = waveQueue[l]
                                 except requests.ConnectionError:
-                                    print "Couldn't get link {}".format(l)
+                                    log.info(u"Couldn't get link {}".format(l))
 
                     survivors = {}
                     keys = waveQueue.keys()
@@ -264,7 +278,7 @@ class SurfMaster(controller.Master):
                                 #    cut_stop = len(thispage) * uniform(self.weather_params["SIZE"],1)
                             
 
-                            print "Inserting [{}:{}] from {} at {}".format(cut_start, cut_stop, u, insertion_point)
+                            log.debug(u"Inserting [{}:{}] from {} at {}".format(cut_start, cut_stop, u, insertion_point))
                             output = output[:insertion_point] + thispage[cut_start:cut_stop] + output[insertion_point:]
 
                             if url == u and len(bigWave) > 0:
@@ -288,25 +302,15 @@ class SurfMaster(controller.Master):
                     waveQueue.clear()
                     for u in survivors:
                         waveQueue[u] = survivors[u]
-                    
-
-                # elif len(waveQueue) > 1 and random() < 0.5:
-                #   # UNLEASH THE WAVE
-                #   print "UNLEASHING THE WAVE:"
-                #   print waveQueue.keys()
-
-                #   msg.content = "\n".join(waveQueue.values())
-                #   msg.encode(msg.headers["content-encoding"][0])
-
-                #   waveQueue.clear()
 
                 # Don't cache
                 msg.headers["Pragma"] = ["no-cache"]
                 msg.headers["Cache-Control"] = ["no-cache, no-store"]
 
         except Exception as e:
-            print e
-            print traceback.format_exc()
+            log.exception(e)
+            #print e
+            #print traceback.format_exc()
 
         msg.reply()
         
@@ -336,6 +340,6 @@ else:
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 server = ProxyServer(config, port)
 m = SurfMaster(server)
-print "SURF proxy loaded on port {}".format(port)
+log.info("---- SURF proxy running on port {} ----".format(port))
 m.run()
 

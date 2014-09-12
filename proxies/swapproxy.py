@@ -16,14 +16,14 @@ import requests
 from random import choice, random
 from bs4 import BeautifulSoup
 
-from utils import concurrent, get_hostname, get_user_info, generate_trust
+from utils import concurrent, get_hostname, get_user_info, generate_trust, get_logger
 from config import global_config
 
 from PIL import Image
 
 from threading import Lock
 
-TRANSPARENT = False
+log = get_logger("SWAP")
 
 collapse_whitespace_rex = re.compile(r'\s+')
 
@@ -39,6 +39,7 @@ options = {
 string_length_classes = range(1,20)
 
 db_mutex = Lock()
+
 
 class SwapMaster(controller.Master):
     def __init__(self, server):
@@ -99,7 +100,7 @@ class SwapMaster(controller.Master):
             user = {"mac": mac, "ip": client_ip, "hostname": hostname}
             
             t1 = time.time()
-            replacements = load_replacements(mac)
+            replacements = load_replacements(mac, url, hostname)
             t2 = time.time()
             #print "Loaded replacements in {}ms".format((t2-t1)*1000)
 
@@ -140,7 +141,7 @@ class SwapMaster(controller.Master):
             hostname, mac = get_user_info(client_ip, global_config["router_IPs"]["swap"]) or client_ip
             user = {"mac": mac, "ip": client_ip, "hostname": hostname}
             
-            replacements = load_replacements(mac)
+            replacements = load_replacements(mac, url, hostname)
             process_html_in_json(user, url, j, charset, replacements)
 
             msg.content = json.dumps(j, sort_keys=True, indent=4, separators=(',', ': '), encoding="utf-8")
@@ -221,6 +222,7 @@ def process_as_html(user, url, contents, charset, replacements):
     # Keep track of used lines to be deleted later
     swap_strings = replacements["strings"] if replacements else {}
     used_strings = []
+    n_replaced = 0
     for line in lines:
         line_len = len(line.strip())
         if swap_strings.get(line_len):
@@ -235,7 +237,8 @@ def process_as_html(user, url, contents, charset, replacements):
                              (line_len >= options["string_limit_medium"] and rand < options["replace_chance_long"])
 
             if should_replace and line_len > 1 and unicode(line).strip() != unicode(replacement_string).strip():
-                #print u"{} -- becomes --> {}".format(unicode(line).strip(), replacement_string.strip())
+                log.debug(u"{} -- becomes --> {}".format(unicode(line).strip(), replacement_string.strip()))
+                n_replaced += 1
 
                 # Preserve spaces/punctuation before and after
                 # TODO: Don't pad with characters that are already there
@@ -259,13 +262,15 @@ def process_as_html(user, url, contents, charset, replacements):
 
     add_strings_to_db(user, url, line_strings, None)
 
+    log.info(u"Replaced {} strings on {}".format(n_replaced, url))
+
     #for length in swap_strings:
     #    print "{1} strings of length {0}".format(length, len(swap_strings[length]))
 
     return soup
 
 
-def load_replacements(not_this_mac):
+def load_replacements(not_this_mac, url, host):
     with sqlite3.connect("db/swap.db") as db:
         db.row_factory = sqlite3.Row
         cursor = db.cursor()
@@ -281,7 +286,7 @@ def load_replacements(not_this_mac):
 
         swap_user = choice(users)
 
-        print "Replacing with content from {}".format(swap_user["hostname"])
+        log.info("<{}> gets content from <{}> - {}".format(host, swap_user["hostname"], url))
 
         t2 = time.time()
         #print "Got user in {}ms".format((t2-t1)*1000)
@@ -373,22 +378,26 @@ def add_strings_to_db(user, source_url, strings, links):
 
 def process_image(user, url, data, filetype):
     # Create PIL Image
-    input_image = cStringIO.StringIO(data)
-    input_image.seek(0)
-    image = Image.open(input_image)
-    width, height = image.size
-    image.close()
+    try:
+        input_image = cStringIO.StringIO(data)
+        input_image.seek(0)
+        image = Image.open(input_image)
+        width, height = image.size
+        image.close()
 
-    add_image_to_db(user, url, data, width, height, filetype)
+        add_image_to_db(user, url, data, width, height, filetype)
 
-    if random() < options["replace_chance_image"]:
-                    # Look for a matching image in the database and replace it
-                    replacement = get_replacement_image(user, width, height, filetype)
-                    if replacement:
-                        print "Replacing {}".format(url)
-                    return replacement or data
+        if random() < options["replace_chance_image"]:
+                        # Look for a matching image in the database and replace it
+                        replacement = get_replacement_image(user, width, height, filetype)
+                        if replacement:
+                            log.info("Replacing {}".format(url))
+                        return replacement or data
 
-    return data
+        return data
+    except Exception as e:
+        log.exception(u"<{}> processing {} ".format(type(e).__name__, url))
+        return data
 
 def get_replacement_image(user, width, height, filetype):
     with sqlite3.connect("db/swap.db") as db:
@@ -408,16 +417,16 @@ def get_replacement_image(user, width, height, filetype):
         swap_user = choice(users)
 
         t2 = time.time()
-        print "Got user in {}ms".format((t2-t1)*1000)
+        #print "Got user in {}ms".format((t2-t1)*1000)
 
-        print swap_user
+        #print swap_user
 
         t1 = time.time()
         cursor.execute("SELECT * FROM images WHERE image_user IS ? AND width = ? AND height = ? AND type = ? ORDER BY time_added ASC LIMIT 100",
                        (swap_user["mac"], width, height, filetype))
         results = cursor.fetchall() or []
         t2 = time.time()
-        print "Got {} images in {}ms".format(len(results), (t2-t1)*1000)
+        log.debug("Got {} images in {}ms".format(len(results), (t2-t1)*1000))
 
         if len(results) > 0:
             img = choice(results)
@@ -468,5 +477,5 @@ else:
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 server = ProxyServer(config, port)
 m = SwapMaster(server)
-print "SWAP proxy loaded on port {}".format(port)
+log.info("---- SWAP proxy loaded on port {} ----".format(port))
 m.run()

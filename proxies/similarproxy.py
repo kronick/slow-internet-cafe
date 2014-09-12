@@ -20,13 +20,15 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent, generate_trust
+from utils import concurrent, generate_trust, get_logger
 
 from bs4 import BeautifulSoup
 
 from PIL import Image
 
 from config import global_config
+
+log = get_logger("SIMILAR")
 
 options = {
     "frequency": 1, # Only replace every nth image
@@ -76,16 +78,16 @@ class SimilarMaster(controller.Master):
         if is_image and should_process:
             images_pending += 1
             req = msg.flow.request
-            url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+            url = u"{}://{}{}".format(req.get_scheme(), u"".join(req.headers["host"]), req.path)
             
             if images_pending > 10:
-              print "(!!! {} images in the queue...)".format(images_pending)
+              log.info("--- {} images in the queue!".format(images_pending))
             
             try:
                 self.process_image(msg)
 
             except Exception as e:
-                print "Error processing image: {}".format(e)
+                log.exception(u"<{}> processing {} ".format(type(e).__name__, url))
 
         else:
             msg.reply()
@@ -95,8 +97,8 @@ class SimilarMaster(controller.Master):
         global images_pending
         client_ip = msg.flow.client_conn.address.address[0]
         req = msg.flow.request
-        url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
-        print "{} requests {}".format(client_ip, url)   
+        url = u"{}://{}{}".format(req.get_scheme(), u"".join(req.headers["host"]), req.path)
+        #log.info(u"{} requests {}".format(client_ip, url))   
         # [ ] Better error handling/investigate crashes
         # Make a POST request with multipart/form and following fields:
         # filename: whatever.jpg
@@ -131,7 +133,7 @@ class SimilarMaster(controller.Master):
             t2 = time.time()
 
 
-            print "Google request made in {:0.3f} s".format(t2-t1)
+            log.debug("Google request made in {:0.3f} s".format(t2-t1))
             
 
             try:
@@ -150,7 +152,7 @@ class SimilarMaster(controller.Master):
                     t1 = time.time()
                     img = requests.get(similar_url, headers={"X-Do-Not-Replace": "True"})
                     t2 = time.time()
-                    print "{}\n--> downloaded in in {:0.3f} s".format(similar_url[-8:], t2-t1)
+                    log.debug("{}\n--> downloaded in in {:0.3f} s".format(similar_url[-8:], t2-t1))
                     msg.content = img.content
             
                     # Force uncompressed response
@@ -158,14 +160,15 @@ class SimilarMaster(controller.Master):
                     # And don't cache
                     msg.headers["Pragma"] = ["no-cache"]
                     msg.headers["Cache-Control"] = ["no-cache, no-store"]
+                    log.info(u"{} is replaced by --> {}".format(url, similar_url))
                 else:
-                    print "!!! Could not find any similar images."
+                    log.info(u"Could not find any similar images for {}".format(url))
 
             except Exception as e:
-                print e
+                log.exception(u"<{}> processing {} ".format(type(e).__name__, url))
 
         except requests.exceptions.Timeout:
-            print "!!! Request taking too long... abort!"
+            log.warning(u"Timeout finding similar images on {}".format(url))
 
         images_pending -= 1
 
@@ -181,6 +184,6 @@ else:
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 server = ProxyServer(config, port)
 m = SimilarMaster(server)
-print "SIMILAR proxy loaded on port {}".format(port)
+log.info("---- SIMILAR proxy loaded on port {} ----".format(port))
 m.run()
 

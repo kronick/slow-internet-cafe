@@ -7,7 +7,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent, generate_trust
+from utils import concurrent, generate_trust, get_logger
 
 import os, sys
 import re
@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 from Adblock import Filter
 from config import global_config
 
+log = get_logger("FREE")
 
 currency_pattern = re.compile(ur'''
     (
@@ -69,7 +70,6 @@ class FreeMaster(controller.Master):
         if "text/html" in "".join(msg.headers["accept"]):
             del(msg.headers["if-modified-since"])
             del(msg.headers["if-none-match"])
-            #print "NO-CACHE"
 
         url = "{}://{}{}".format(msg.get_scheme(), "".join(msg.headers["host"]), msg.path)
         #if adblock_filter.match(url):
@@ -94,7 +94,7 @@ class FreeMaster(controller.Master):
         charset = None
         
         req = msg.flow.request
-        url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+        url = u"{}://{}{}".format(req.get_scheme(), u"".join(req.headers["host"]), req.path)
         for head in content_headers:
             if head.startswith("charset="):
                 charset = head[8:].lower()
@@ -108,7 +108,7 @@ class FreeMaster(controller.Master):
                     msg.headers["content-encoding"] = [""]
                     msg.headers["content-type"] = ["image/png"]
 
-                    print url
+                    log.info(u"Replacing ad image: {}".format(url))
 
                     # Never cache  modified response
                     msg.headers["Pragma"] = ["no-cache"]
@@ -217,16 +217,17 @@ def process_html_in_json(j, charset):
                         #link.strings[0].replace_with("LINK!!!")
                      #   print [s for s in link.strings]
                     soup = process_as_html(soup, charset)
-                    print j[k]
+                    #print j[k]
                     j[k] = u" ".join([unicode(t) for t in soup.body.contents])
 
-                    print j[k]
-                    print "---> Found some HTML in this JSON!"
+                    #print j[k]
+                    #print "---> Found some HTML in this JSON!"
 
                 
                     #print j[k]
                 else:
-                    print u"Just a single value: " + j[k]
+                    pass
+                    #print u"Just a single value: " + j[k]
                     
 
             except TypeError as e:
@@ -291,5 +292,5 @@ else:
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 server = ProxyServer(config, port)
 m = FreeMaster(server)
-print "FREE proxy loaded on port {}".format(port)
+log.info("---- FREE proxy running on port {} ----".format(port))
 m.run()

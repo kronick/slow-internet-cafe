@@ -33,7 +33,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent, avoid_captive_portal, generate_trust
+from utils import concurrent, avoid_captive_portal, generate_trust, get_logger
 
 from jinja2 import Environment, FileSystemLoader
 template_env = Environment(loader=FileSystemLoader("templates"))
@@ -47,6 +47,8 @@ options = {
         "static-server-host": "static-01.slow",
         "static-server-port": "8000",
         }
+
+log = get_logger("LOCAL")
 
 class LocalMaster(controller.Master):
     def __init__(self, server):
@@ -90,8 +92,7 @@ class LocalMaster(controller.Master):
         try:
             
             content_type = " ".join(msg.headers["content-type"])
-            print "HOST: {}".format(msg.flow.request.host)
-            print msg.flow.request.headers["host"]
+            
             msg.flow.request.host = "".join(msg.flow.request.headers["host"])
 
             if msg.code != 301 and msg.code != 302 and content_type is not None and "text/html" in content_type and msg.flow.request.host not in ["192.168.1.128", "127.0.0.1", "localhost"]:
@@ -102,9 +103,10 @@ class LocalMaster(controller.Master):
                 except:
                     query = msg.flow.request.host
 
-                print msg.flow.request.host
+            
                 r = requests.get("http://freegeoip.net/json/" + query)
-                print r.content
+                log.debug(u"{} - {}".format(msg.flow.request.host, r.content))
+
                 try:
                     j = json.loads(r.content)
                     country_code = j["country_code"].lower()
@@ -148,6 +150,10 @@ class LocalMaster(controller.Master):
                         # Don't cache
                         msg.headers["Pragma"] = ["no-cache"]
                         msg.headers["Cache-Control"] = ["no-cache, no-store"]
+
+                        log.info(u"NOT local: <{}>".format(msg.flow.request.host))
+                    else:
+                        log.info(u"LOCAL: <{}>".format(msg.flow.request.host))
                 except ValueError as e:
                     #template = template_env.get_template('local/error.html')
                     template = template_env.get_template('local/notlocal.html')
@@ -159,10 +165,12 @@ class LocalMaster(controller.Master):
                     msg.headers["Pragma"] = ["no-cache"]
                     msg.headers["Cache-Control"] = ["no-cache, no-store"]
                     
-                    print "Could not decode JSON: " + str(e)
+                    
+                    log.exception(u"<{}> parsing JSON for {} ".format(type(e).__name__, msg.flow.request.host))
+                    
 
         except Exception as e:
-            print e
+            log.exception(u"<{}> checking {} ".format(type(e).__name__, msg.flow.request.host))
 
 
 if global_config["transparent_mode"]:
@@ -179,6 +187,6 @@ server = ProxyServer(config, port)
 m = LocalMaster(server)
 
 
-print "LOCAL proxy loaded on port {}".format(port)
+log.info("---- LOCAL proxy loaded on port {} ---".format(port))
 m.run()
 

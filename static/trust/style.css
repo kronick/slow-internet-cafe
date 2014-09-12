@@ -1,0 +1,70 @@
+
+body {
+    font-family: Ubuntu, sans-serif;
+    font-weight: lighter;
+    margin: 0;
+    padding: 0;
+    /*background: url(googlessl-faded-3.jpg);*/
+    background: url(../about/bg.jpg);
+    background-size: cover;
+    background-attachment: fixed;
+}
+img {
+    border: 0;
+}
+h1 {
+    font-family: "Ubuntu Condensed", sans-serif;
+}
+#content {
+    width: 600px;
+    margin: auto;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    text-align: center;
+    padding: 0;
+}
+#content p {
+    text-align: left;
+    line-height: 1.5em;
+}
+#content p img.block {
+    width: 400px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 1em;
+    margin-bottom: 1em;
+}
+
+#content p img.center {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 1em;
+    margin-bottom: 1em;
+}
+
+#content a {
+    color: #333;
+    font-style: italic;
+}
+#content a:hover{
+    text-decoration: none;
+}
+
+#content-inner {
+    background: rgba(255,255,255,0.6);
+    height: 100%;
+    padding: 10px;
+}
+
+.fineprint {
+    font-size: 75%;
+}
+
+#after-downloading {
+    border: 1px solid black;
+    padding: 10px;
+}

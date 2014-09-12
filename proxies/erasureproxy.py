@@ -14,7 +14,7 @@ from libmproxy import platform
 from libmproxy.proxy.primitives import TransparentUpstreamServerResolver
 TRANSPARENT_SSL_PORTS = [443, 8433]
 
-from utils import concurrent, generate_trust
+from utils import concurrent, generate_trust, get_logger
 
 import os,sys
 import math
@@ -28,11 +28,9 @@ from PIL import Image, ImageDraw
 import time
 from config import global_config
 
+log = get_logger("ERASURE")
+
 #eye_cascade = cv2.CascadeClassifier('data/haarcascade_eye.xml')
-
-imgid = 0
-TMP_DIR = "data/tmp/"
-
 
 dot = Image.open("../static/img/face-dot-white.png")
 
@@ -53,10 +51,10 @@ def processedFace(data, ext):
 
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-    if(len(faces) == 0):
-        print "No faces."
-    else:
-        print "{} faces.".format(len(faces))
+    # if(len(faces) == 0):
+    #     log.debug("No faces.")
+    # else:
+    #     log.debug("{} faces.".format(len(faces)))
 
     # Identify the male faces
     male_faces = []
@@ -74,10 +72,10 @@ def processedFace(data, ext):
         else:
             female_faces.append((x,y,w,h))
 
-    if(len(male_faces) == 0):
-        print "No faces are male."
-    else:
-        print "{} faces are male.".format(len(male_faces))
+    # if(len(male_faces) == 0):
+    #     log.debug("No faces are male.")
+    # else:
+    #     log.info("Censoring {} male faces.".format(len(male_faces)))
 
     # Don't do any more processing if no male faces are found
     if len(faces) == 0:
@@ -175,34 +173,36 @@ class FacesMaster(controller.Master):
         router_ip = global_config["router_IPs"]["local"]
         if generate_trust(msg, client_ip, router_ip):
             return
-
         # Only worry about images
         content_type = " ".join(msg.headers["content-type"])
         if msg.code != 200 or content_type is None or not ("image/jpeg" in content_type or "image/webp" in content_type or "image/png" in content_type):
             return
 
         try:
-            if "image/jpeg" in content_type:
-                ext = "JPEG"
-            elif "image/png" in content_type:
-                ext = "PNG"                
-            else:
-                ext = "WEBP"
+            req = msg.flow.request
+            url = u"{}://{}{}".format(req.get_scheme(), u"".join(req.headers["host"]), req.path)
 
-            censored = processedFace(msg.get_decoded_content(), ext)
+            ext = "JPEG" if "image/jpeg" in content_type else "PNG" if "image/png" in content_type else "WEBP"
+            content = msg.get_decoded_content()
+            if len(content) < 100:
+                return
+                
+            censored = processedFace(content, ext)
             msg.content = censored or msg.content
             
             # Force uncompressed response
             if censored:
+                log.info(u"Faces found in image: {}".format(url))
+
                 msg.headers["content-encoding"] = [""]
             # Don't cache
             msg.headers["Pragma"] = ["no-cache"]
             msg.headers["Cache-Control"] = ["no-cache, no-store"]
 
         except Exception as e:
-            print "Error processing image: {}".format(e)
+            log.exception(u"<{}> processing {} ".format(type(e).__name__, url))
 
-        print "Replying with image..."
+        #log.debug("Replying with image...")
         
 
 if global_config["transparent_mode"]:
@@ -217,5 +217,5 @@ else:
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 server = ProxyServer(config, port)
 m = FacesMaster(server)
-print "ERASURE proxy loaded on port {}".format(port)
+log.info("---- ERASURE proxy running on port {} ----".format(port))
 m.run()

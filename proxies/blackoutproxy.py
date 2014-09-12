@@ -13,7 +13,7 @@ import threading
 import socket
 import sqlite3
 
-from utils import concurrent, get_hostname, avoid_captive_portal, generate_trust
+from utils import concurrent, get_hostname, avoid_captive_portal, generate_trust, get_logger
 
 from datetime import datetime, timedelta
 from time import time
@@ -25,6 +25,8 @@ from config import global_config
 
 ALLOWED_HOSTS = ["captive.apple.com"]
 ALLOWED_AGENTS = ["CaptiveNetworkSupport"]
+
+log = get_logger("BLACKOUT")
 
 class BlackoutMaster(controller.Master):
     def __init__(self, server):
@@ -64,7 +66,7 @@ class BlackoutMaster(controller.Master):
             try:
                self.process_html(msg)
             except Exception as e:
-                print e
+                log.exception(e)
 
 
     def process_html(self, msg):
@@ -170,5 +172,5 @@ else:
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 server = ProxyServer(config, port)
 m = BlackoutMaster(server)
-print "BLACKOUT proxy loaded on port {}".format(port)
+log.info("---- BLACKOUT proxy loaded on port {} ----".format(port))
 m.run()

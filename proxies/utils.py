@@ -2,6 +2,10 @@ from libmproxy import controller
 import threading
 import sqlite3
 
+import logging, logging.handlers
+from config import global_config
+from os import path
+
 def concurrent(fn):
     def _concurrent(ctx, msg):
 
@@ -104,3 +108,25 @@ def avoid_captive_portal(msg):
             return True
 
     return False
+
+
+def get_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(min(global_config["log_level"], global_config["log_console_level"]))
+    formatter = logging.Formatter("%(asctime)s [%(name)s - %(levelname)s] %(message)s")
+    #filehandler = logging.FileHandler(path.join(global_config["log_dir"], name), encoding="utf-8")
+    filehandler = logging.handlers.RotatingFileHandler(path.join(global_config["log_dir"], name), maxBytes=global_config["log_max_size"], backupCount=10, encoding="utf-8")
+    filehandler.setLevel(global_config["log_level"])
+    filehandler.setFormatter(formatter)
+    logger.addHandler(filehandler)
+    if global_config["log_console_level"]:
+        # Add a handler to output to stdout & stderr
+        stream_formatter = logging.Formatter("%(asctime)s [%(name)s - %(levelname)s] %(message)s")
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(global_config["log_console_level"])
+        stream_handler.setFormatter(stream_formatter)
+        logger.addHandler(stream_handler)
+
+    return logger
+
+

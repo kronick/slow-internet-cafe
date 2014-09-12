@@ -1,11 +1,15 @@
-import logging
 import subprocess
 from time import sleep, time
 import requests
+from config import global_config
 
-logging.root.setLevel(logging.DEBUG)
+from utils import get_logger
 
-python = "../venv/bin/python"
+log = get_logger("LAUNCHER")
+
+log.info("---- Launching proxies ----")
+
+python = global_config["python"]
 
 proxies = [
     {"name": "localproxy.py", "port": "8080", "tests": [("http://www.google.com", 20)]},
@@ -19,11 +23,11 @@ proxies = [
 processes = []
 
 def launch(proxy):
-    logging.info("Launching {} on port {}".format(proxy["name"], proxy["port"]))
+    log.info("Launching {} on port {}".format(proxy["name"], proxy["port"]))
     proxy["process"] = subprocess.Popen([python, proxy["name"], proxy["port"]])
 
 def kill(proxy):
-    logging.warn("Killing {}!".format(proxy["name"]))
+    log.warn("Killing {}!".format(proxy["name"]))
     if proxy.get("process"):
         proxy["process"].terminate()
 
@@ -31,7 +35,7 @@ def test(proxy):
     if not proxy.get("tests"):
         return
 
-    logging.debug("Checking to see if {} is running...".format(proxy["name"]))
+    log.debug("Checking to see if {} is running...".format(proxy["name"]))
     for t in proxy["tests"]:
         failed = False
         error = ""
@@ -43,7 +47,7 @@ def test(proxy):
             error = str(e)
 
         if failed:
-            logging.error("{} is not working properly!! Failed to get {}: {}".format(proxy["name"], t[0], error))
+            log.error("{} is not working properly!! Failed to get {}: {}".format(proxy["name"], t[0], error))
             kill(proxy)
             launch(proxy)
             break
@@ -63,10 +67,10 @@ try:
         sleep(10)
         
 except KeyboardInterrupt:
-    logging.debug("Terminating...")
+    log.debug("Terminating...")
     pass
 
 for p in proxies:
     kill(p)
 
-logging.debug("Launcher terminated.")
+log.debug("Launcher terminated.")
