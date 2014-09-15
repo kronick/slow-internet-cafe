@@ -65,6 +65,45 @@ def generate_trust(msg, clientIP, routerIP):
             db.commit()
             print "TRUSTING {}".format(mac)
 
+    if "use_the_cafe=1" in msg.flow.request.path:
+        host, mac = get_user_info(clientIP, routerIP)
+        db = sqlite3.connect("../dhcp-sync/data/dhcp-sync.db")
+        with db:
+            db.row_factory = sqlite3.Row
+            cursor = db.cursor()
+            cursor.execute("UPDATE clients SET active=1 WHERE mac=?", (mac,))
+            db.commit()
+            print "USING {}".format(mac)
+
+    if msg.code == 200 and "text/html" in " ".join(msg.headers["content-type"]):
+        new_user = True
+        host, mac = get_user_info(clientIP, routerIP)
+        db = sqlite3.connect("../dhcp-sync/data/dhcp-sync.db")
+        with db:
+            db.row_factory = sqlite3.Row
+            cursor = db.cursor()
+            cursor.execute("SELECT * FROM clients WHERE mac=?", (mac,))
+            result = cursor.fetchall()
+            if result:
+                for r in result:
+                    if r["active"] > 0 or r["cert_installed"] > 0:
+                        new_user = False
+
+        if new_user:
+            # Redirect to the ABOUT page
+            msg.code = 302
+            msg.msg = "Found"
+            req = msg.flow.request
+            if msg.headers.get("location"):
+                url = msg.headers["location"][0]
+            else:
+                url = "{}://{}{}".format(req.get_scheme(), "".join(req.headers["host"]), req.path)
+
+            #msg.headers["location"] = ["{}://cafe.slow/about?r={}".format(msg.flow.request.get_scheme(), url)]
+            msg.headers["location"] = ["http://cafe.slow/about?r={}".format(url)]
+
+            return True            
+
     if ((msg.code in [301, 302, 303, 307]) and msg.headers["location"][0].startswith("https")) or msg.code == 204:
         # Check if this user has already acknowledged the trust certificate
         host, mac = get_user_info(clientIP, routerIP)
@@ -74,10 +113,11 @@ def generate_trust(msg, clientIP, routerIP):
             db.row_factory = sqlite3.Row
             cursor = db.cursor()
             cursor.execute("SELECT * FROM clients WHERE mac=?", (mac,))
-            result = cursor.fetchone()
-
-            if result and result["cert_installed"] > 0:
-                return False    # No need to do anything more...
+            result = cursor.fetchall()
+            if result:
+                for r in result:
+                    if r["cert_installed"] > 0:
+                        return False
         
         # Redirect to the HTTPS trust page
         msg.code = 302

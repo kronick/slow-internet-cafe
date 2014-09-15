@@ -31,7 +31,12 @@ function showContinue() {
 }
 
 function updateCertificateLink() {
-    //$(".certificate").prop("href", "#")
+    if(/Win/i.test(navigator.platform)) {
+        $(".certificate").prop("href", "slow-internet-cafe-ca-cert.p12")
+    }
+    else {
+        $(".certificate").prop("href", "slow-internet-cafe-ca-cert.pem")
+    }
     $(".certificate").click(function() {
         showContinue();
         //return false;
@@ -99,7 +104,7 @@ function updateLink(trust) {
             <p style="font-size: 75%; text-align: center;"><label><input type="checkbox" CHECKED name="trust" id="trust-check" onchange="updateTrust(this.checked)">Don't show me this again. I've installed the certificate and trust the Slow Internet Cafe!</label>
             </p>
             <p style="font-size: 75%; text-align: center;">
-                If that didn't work, try the version for: <a href="windows">Windows</a> | <a href="MAc">Apple</a> | <a href="android">Android</a> | <a href="other">Other</a>
+                If that didn't work, try the version for: <a href="slow-internet-cafe-ca-cert.p12">Windows</a> | <a href="slow-internet-cafe-ca-cert.pem">Apple</a> | <a href="slow-internet-cafe-ca-cert.cer">Android</a> | <a href="slow-internet-cafe-ca-cert.pem">Other</a>
             </p>
         </div>
     </div>

@@ -64,7 +64,7 @@ class SimilarMaster(controller.Master):
     def handle_response(self, msg):
         # First see if we need to show the HTTPS user agreement/certificate download
         client_ip = msg.flow.client_conn.address.address[0]
-        router_ip = global_config["router_IPs"]["local"]
+        router_ip = global_config["router_IPs"]["similar"]
         if generate_trust(msg, client_ip, router_ip):
             return
 

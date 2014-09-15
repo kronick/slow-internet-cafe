@@ -69,7 +69,7 @@ def createRecord(cursor, db, router, ip, mac, host):
     cursor.execute("DELETE FROM clients WHERE routerIP=? and clientIP=?", (router, ip))
 
     cursor.execute("INSERT INTO clients(routerIP, clientIP, mac, host, time, active, cert_installed)" \
-                    "values(?, ?, ?, ?, ?, 1, 0)", (router, ip, mac, host, int(time.time())))
+                    "values(?, ?, ?, ?, ?, 0, 0)", (router, ip, mac, host, int(time.time())))
     db.commit()
 
 def updateRecord(cursor, db, router, mac, ip, host):
